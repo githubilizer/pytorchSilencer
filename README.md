@@ -15,6 +15,7 @@ This application is designed to learn from well-formatted transcripts with appro
 - **Prediction**: Process new transcripts to identify silences that should be cut
 - **Visualization**: Monitor training progress with loss graphs
 - **Sleek Dark Mode UI**: Modern, eye-friendly interface
+- **Audio Silencer**: Trim video/audio based on processed transcripts with automatic crossfading
 
 ## How It Works
 

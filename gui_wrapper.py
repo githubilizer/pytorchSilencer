@@ -65,6 +65,9 @@ class PytorchSilencerApp(QMainWindow):
         self.model_path = f"models/silence_model_{timestamp}.pt"
         self.input_transcript = ""
         self.output_transcript = ""
+        self.processed_transcript_path = ""
+        self.input_video_path = ""
+        self.output_video_path = ""
         
         # Setup UI
         self.setup_ui()
@@ -109,6 +112,11 @@ class PytorchSilencerApp(QMainWindow):
         prediction_tab = QWidget()
         self.setup_prediction_tab(prediction_tab)
         tabs.addTab(prediction_tab, "Process Transcript")
+
+        # Create audio silencer tab
+        audio_tab = QWidget()
+        self.setup_audio_tab(audio_tab)
+        tabs.addTab(audio_tab, "Audio Silencer")
         
         # Add tabs to main layout
         main_layout.addWidget(tabs)
@@ -303,6 +311,76 @@ class PytorchSilencerApp(QMainWindow):
         layout.addWidget(threshold_group)
         layout.addLayout(button_layout)
         layout.addWidget(log_group, 1)  # Give log more stretch
+
+    def setup_audio_tab(self, tab):
+        layout = QVBoxLayout(tab)
+
+        # Processed transcript selection
+        transcript_group = QGroupBox("Processed Transcript")
+        transcript_layout = QHBoxLayout(transcript_group)
+
+        self.audio_transcript_field = QLineEdit()
+        self.audio_transcript_field.setReadOnly(True)
+        self.audio_transcript_field.setPlaceholderText("Select processed transcript file...")
+
+        browse_transcript_button = QPushButton("Browse...")
+        browse_transcript_button.clicked.connect(self.browse_audio_transcript)
+
+        transcript_layout.addWidget(self.audio_transcript_field)
+        transcript_layout.addWidget(browse_transcript_button)
+
+        # Video selection
+        video_group = QGroupBox("Input Video")
+        video_layout = QHBoxLayout(video_group)
+
+        self.video_path_field = QLineEdit()
+        self.video_path_field.setReadOnly(True)
+        self.video_path_field.setPlaceholderText("Select video file...")
+
+        browse_video_button = QPushButton("Browse...")
+        browse_video_button.clicked.connect(self.browse_video_file)
+
+        video_layout.addWidget(self.video_path_field)
+        video_layout.addWidget(browse_video_button)
+
+        # Output video
+        output_video_group = QGroupBox("Output Video")
+        output_video_layout = QHBoxLayout(output_video_group)
+
+        self.output_video_field = QLineEdit()
+        self.output_video_field.setReadOnly(True)
+        self.output_video_field.setPlaceholderText("Select output video file...")
+
+        browse_output_video_button = QPushButton("Browse...")
+        browse_output_video_button.clicked.connect(self.browse_output_video)
+
+        output_video_layout.addWidget(self.output_video_field)
+        output_video_layout.addWidget(browse_output_video_button)
+
+        # Process button
+        button_layout = QHBoxLayout()
+
+        self.audio_process_btn = QPushButton("Cut Video")
+        self.audio_process_btn.clicked.connect(self.process_video)
+
+        button_layout.addStretch()
+        button_layout.addWidget(self.audio_process_btn)
+
+        # Log viewer
+        log_group = QGroupBox("Log")
+        log_layout = QVBoxLayout(log_group)
+
+        self.audio_log_viewer = QTextEdit()
+        self.audio_log_viewer.setReadOnly(True)
+
+        log_layout.addWidget(self.audio_log_viewer)
+
+        # Add widgets to layout
+        layout.addWidget(transcript_group)
+        layout.addWidget(video_group)
+        layout.addWidget(output_video_group)
+        layout.addLayout(button_layout)
+        layout.addWidget(log_group, 1)
         
     def browse_training_data(self):
         directory = QFileDialog.getExistingDirectory(self, "Select Training Data Directory")
@@ -397,8 +475,39 @@ class PytorchSilencerApp(QMainWindow):
             base, ext = os.path.splitext(file_path)
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             file_path = f"{base}_{timestamp}{ext}"
-            self.output_transcript = file_path
-            self.output_transcript_field.setText(file_path)
+        self.output_transcript = file_path
+        self.output_transcript_field.setText(file_path)
+
+    def browse_audio_transcript(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Select Processed Transcript", "", "Text Files (*.txt)"
+        )
+        if file_path:
+            self.processed_transcript_path = file_path
+            self.audio_transcript_field.setText(file_path)
+            if not self.output_video_path:
+                base, _ = os.path.splitext(file_path)
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                self.output_video_path = f"{base}_cut_{timestamp}.mp4"
+                self.output_video_field.setText(self.output_video_path)
+
+    def browse_video_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Select Video File", "", "Video Files (*.mp4 *.mov *.mkv)"
+        )
+        if file_path:
+            self.input_video_path = file_path
+            self.video_path_field.setText(file_path)
+
+    def browse_output_video(self):
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Select Output Video", "", "Video Files (*.mp4 *.mov *.mkv)"
+        )
+        if file_path:
+            base, ext = os.path.splitext(file_path)
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            self.output_video_path = f"{base}_{timestamp}{ext}"
+            self.output_video_field.setText(self.output_video_path)
             
     def process_transcript(self):
         # Validate inputs
@@ -445,6 +554,42 @@ class PytorchSilencerApp(QMainWindow):
         self.process_thread.progress_update.connect(self.add_process_log)
         self.process_thread.command_finished.connect(self.on_processing_finished)
         self.process_thread.start()
+
+    def process_video(self):
+        if not self.processed_transcript_path:
+            QMessageBox.warning(self, "No Transcript", "Please select a processed transcript file.")
+            return
+        if not self.input_video_path:
+            QMessageBox.warning(self, "No Video", "Please select an input video file.")
+            return
+        if not self.output_video_field.text():
+            QMessageBox.warning(self, "No Output", "Please specify an output video file.")
+            return
+
+        transcript_path = self.processed_transcript_path
+        video_path = self.input_video_path
+        output_path = self.output_video_path
+        base, ext = os.path.splitext(output_path)
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = f"{base}_{timestamp}{ext}"
+        self.output_video_path = output_path
+        self.output_video_field.setText(output_path)
+
+        self.audio_log_viewer.clear()
+        self.add_audio_log("Starting video cutting...")
+        self.audio_process_btn.setEnabled(False)
+
+        command = [
+            "python", "audio_silencer.py",
+            "--video", video_path,
+            "--transcript", transcript_path,
+            "--output", output_path,
+        ]
+
+        self.video_thread = CommandThread(command)
+        self.video_thread.progress_update.connect(self.add_audio_log)
+        self.video_thread.command_finished.connect(self.on_video_finished)
+        self.video_thread.start()
     
     def add_log_message(self, message):
         """Add a message to the training log viewer with timestamp"""
@@ -488,6 +633,22 @@ class PytorchSilencerApp(QMainWindow):
         scrollbar.setValue(scrollbar.maximum())
         # Process events to update UI
         QApplication.processEvents()
+
+    def add_audio_log(self, message):
+        timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+        self.audio_log_viewer.append(f"[{timestamp}] {message}")
+        scrollbar = self.audio_log_viewer.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+        QApplication.processEvents()
+
+    def on_video_finished(self, success, message):
+        self.audio_process_btn.setEnabled(True)
+        if success:
+            self.add_audio_log("Video cutting completed!")
+            QMessageBox.information(self, "Success", "Video saved successfully!")
+        else:
+            self.add_audio_log(f"Video cutting failed: {message}")
+            QMessageBox.critical(self, "Error", f"Video cutting failed: {message}")
         
     def on_training_finished(self, success, message):
         # Re-enable button
