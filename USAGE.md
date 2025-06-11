@@ -70,6 +70,16 @@ This will mark all silences longer than 2 seconds for cutting.
 ./silencer.sh --mode cli --input your_transcript.txt --model models/your_model.pt
 ```
 
+### Using the Autoencoder
+
+If you only have good examples, train the autoencoder and cut anything that
+doesn't match:
+
+```bash
+python autoencoder_demo.py train --data your_training_data --model models/ae_model.pt
+python autoencoder_demo.py process --model models/ae_model.pt --input new_transcript.txt --output cleaned.txt
+```
+
 ### Using the GUI
 
 Just run the application without parameters to launch the GUI:
