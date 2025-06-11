@@ -1,0 +1,32 @@
+# Python virtual environment
+venv/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local development settings
+.env
+.env.*
+*.log
+
+# IDE settings
+.vscode/
+.idea/
+
+# Generated files
+*.pth
+*.pt
+*.model
+*.pkl
+
+# Operating System
+.DS_Store
+Thumbs.db
+
+# Large data files
+*.wav
+*.mp3
+*.mp4
+*.avi
