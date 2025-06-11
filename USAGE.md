@@ -43,6 +43,8 @@ When using CLI mode with LSTM processing:
 - `--seq-length`: Sequence length for LSTM (default: 10)
 - `--epochs`: Training epochs (default: 50)
 - `--batch-size`: Training batch size (default: 8)
+- `--duration-threshold`: Override the model's long-silence threshold
+  (in seconds). By default the threshold is learned from training data.
 
 ## Example Workflows
 

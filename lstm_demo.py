@@ -32,7 +32,18 @@ def train_model(data_dir, model_path, sequence_length=10, epochs=50, batch_size=
         print(f"Loaded {len(features)} training sequences with shape {features.shape}")
         
         # Initialize model - Use GPU with the nightly build that supports RTX 5060
-        predictor = SilencePredictor(sequence_length=sequence_length, force_cpu=False)
+        # Derive long silence threshold from training data
+        silence_vals = features[:, :, 2].reshape(-1)
+        silence_vals = silence_vals[silence_vals > 0]
+        long_thresh = float(np.percentile(silence_vals, 95)) if len(silence_vals) > 0 else None
+        if long_thresh is not None:
+            print(f"Derived long silence threshold: {long_thresh:.2f}s")
+
+        predictor = SilencePredictor(
+            sequence_length=sequence_length,
+            force_cpu=False,
+            long_silence_threshold=long_thresh,
+        )
         
         # Train model with more verbose output
         for epoch in range(1, epochs+1):
@@ -61,8 +72,24 @@ def train_model(data_dir, model_path, sequence_length=10, epochs=50, batch_size=
         print(traceback.format_exc())
         return False
 
-def process_transcript(model_path, input_path, output_path=None, threshold=0.5):
-    """Process a transcript using a trained model"""
+def process_transcript(model_path, input_path, output_path=None,
+                       threshold=0.5, duration_threshold=None):
+    """Process a transcript using a trained model
+
+    Parameters
+    ----------
+    model_path : str
+        Path to the trained model.
+    input_path : str
+        Transcript file to process.
+    output_path : str, optional
+        Where to save the processed transcript.
+    threshold : float, optional
+        Prediction threshold for the LSTM model.
+    duration_threshold : float, optional
+        Override for long silence detection. If None, the value
+        stored in the model will be used.
+    """
     try:
         # Load the model - Use GPU with the nightly build that supports RTX 5060
         predictor = SilencePredictor(model_path=model_path, force_cpu=False)
@@ -82,16 +109,27 @@ def process_transcript(model_path, input_path, output_path=None, threshold=0.5):
             print("No features extracted from transcript.")
             return False
         
-        # Predict which silences to cut
+        # Predict which silences to cut using the model
         print("Predicting silences to cut...")
         keep_silence = predictor.predict(features, threshold=threshold)
 
         # Convert keep predictions to cut markers for saving
         cut_markers = [not keep for keep in keep_silence]
+
+        # Fallback: enforce cutting of very long silences
+        effective_threshold = duration_threshold
+        if effective_threshold is None:
+            effective_threshold = predictor.long_silence_threshold
+
+        if effective_threshold is not None:
+            for i, entry in enumerate(transcript.entries[:-1]):
+                silence_duration = transcript.entries[i+1].start_time - entry.end_time
+                if silence_duration >= effective_threshold:
+                    cut_markers[i] = True
         
-        # Calculate statistics
-        total_silences = len(keep_silence)
-        silences_to_cut = sum(1 for keep in keep_silence if not keep)
+        # Calculate statistics using final cut markers
+        total_silences = len(cut_markers)
+        silences_to_cut = sum(1 for cut in cut_markers if cut)
         cut_percentage = silences_to_cut / total_silences * 100 if total_silences > 0 else 0
         
         print(f"Total silences: {total_silences}")
@@ -128,6 +166,9 @@ def main():
     process_parser.add_argument("--input", required=True, help="Input transcript file")
     process_parser.add_argument("--output", help="Output transcript file")
     process_parser.add_argument("--threshold", type=float, default=0.5, help="Prediction threshold (0-1)")
+    process_parser.add_argument(
+        "--duration-threshold", type=float, default=None,
+        help="Override automatic long silence threshold (seconds)")
     
     args = parser.parse_args()
     
@@ -135,7 +176,13 @@ def main():
     if args.command == "train":
         train_model(args.data, args.model, args.seq_length, args.epochs, args.batch_size)
     elif args.command == "process":
-        process_transcript(args.model, args.input, args.output, args.threshold)
+        process_transcript(
+            args.model,
+            args.input,
+            args.output,
+            args.threshold,
+            args.duration_threshold,
+        )
     else:
         parser.print_help()
 
