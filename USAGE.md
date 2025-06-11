@@ -92,4 +92,5 @@ Just run the application without parameters to launch the GUI:
 
 Then use the interface to:
 1. Train a model (Training tab)
-2. Process transcripts (Prediction tab) 
+2. Process transcripts (Prediction tab)
+3. Cut video using processed transcript (Audio Silencer tab)
