@@ -65,6 +65,10 @@ See `requirements.txt` for detailed dependencies.
    - Set the threshold and click "Predict Silences"
    - Save the processed output
 
+When running from the command line, the LSTM model automatically uses a
+long-silence threshold derived from the training data. You can override
+this by passing `--duration-threshold` with a custom number of seconds.
+
 ## Transcript Format
 
 The application expects transcripts in the following format:

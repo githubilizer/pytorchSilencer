@@ -139,7 +139,9 @@ class SequenceScaler:
         return X_scaled
 
 class SilencePredictor:
-    def __init__(self, model_path: Optional[str] = None, sequence_length: int = 10, input_size: int = 14, force_cpu: bool = False):
+    def __init__(self, model_path: Optional[str] = None, sequence_length: int = 10,
+                 input_size: int = 14, force_cpu: bool = False,
+                 long_silence_threshold: Optional[float] = None):
         self.input_size = input_size  # Updated feature count
         self.sequence_length = sequence_length
         
@@ -176,6 +178,7 @@ class SilencePredictor:
         # Initialize model
         self.model = LSTMSilenceClassifier(self.input_size)
         self.scaler = SequenceScaler()
+        self.long_silence_threshold = long_silence_threshold
         
         # Move model to device
         self.model.to(self.device)
@@ -378,7 +381,8 @@ class SilencePredictor:
         torch.save({
             'model_state_dict': self.model.state_dict(),
             'sequence_length': self.sequence_length,
-            'input_size': self.input_size
+            'input_size': self.input_size,
+            'long_silence_threshold': self.long_silence_threshold,
         }, model_path)
         
         # Save scaler
@@ -404,6 +408,7 @@ class SilencePredictor:
             
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.sequence_length = checkpoint.get('sequence_length', 10)  # Default to 10 if not found
+        self.long_silence_threshold = checkpoint.get('long_silence_threshold')
         self.model.eval()
         
         # Load scaler
