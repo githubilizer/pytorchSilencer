@@ -30,3 +30,13 @@ Thumbs.db
 *.mp3
 *.mp4
 *.avi
+
+# Additional model files and outputs
+*_model.pt
+*_model_gpu.pt
+*.scaler
+*_output.txt
+*_processed.txt
+test_output.txt
+lstm_output.txt
+lstm_output_gpu.txt

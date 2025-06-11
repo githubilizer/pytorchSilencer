@@ -93,12 +93,17 @@ class SequenceScaler:
         
     def fit(self, X):
         """
-        Fit scaler to 3D sequence data
-        X shape: (batch_size, seq_len, features)
+        Fit scaler to 3D sequence data or 2D feature data
+        X shape: (batch_size, seq_len, features) or (n_samples, n_features)
         """
-        # Reshape to 2D for StandardScaler
-        batch_size, seq_len, n_features = X.shape
-        X_reshaped = X.reshape(-1, n_features)
+        # Check if input is 2D or 3D
+        if len(X.shape) == 2:
+            # Already 2D, no need to reshape
+            X_reshaped = X
+        else:
+            # Reshape 3D to 2D for StandardScaler
+            batch_size, seq_len, n_features = X.shape
+            X_reshaped = X.reshape(-1, n_features)
         
         # Fit scaler
         self.scaler.fit(X_reshaped)
@@ -107,23 +112,29 @@ class SequenceScaler:
     
     def transform(self, X):
         """
-        Transform 3D sequence data
-        X shape: (batch_size, seq_len, features)
+        Transform 3D sequence data or 2D feature data
+        X shape: (batch_size, seq_len, features) or (n_samples, n_features)
         """
         if not self.is_fitted:
             raise ValueError("Scaler has not been fitted yet.")
             
         # Get original shape
         original_shape = X.shape
+        is_2d = len(original_shape) == 2
         
-        # Reshape to 2D for transformation
-        X_reshaped = X.reshape(-1, original_shape[2])
+        # Reshape if needed
+        if is_2d:
+            X_reshaped = X
+        else:
+            # Reshape 3D to 2D for transformation
+            X_reshaped = X.reshape(-1, original_shape[2])
         
         # Transform
         X_scaled = self.scaler.transform(X_reshaped)
         
-        # Reshape back to original shape
-        X_scaled = X_scaled.reshape(original_shape)
+        # Reshape back to original shape if needed
+        if not is_2d:
+            X_scaled = X_scaled.reshape(original_shape)
         
         return X_scaled
 
@@ -181,16 +192,19 @@ class SilencePredictor:
         print(f"Training on device: {self.device}")
         
         # Fit scaler on sequence features
+        print(f"Scaling features...")
         self.scaler.fit(features)
         
         # Scale features
         scaled_features = self.scaler.transform(features)
         
         # Convert to PyTorch tensors
+        print(f"Converting to tensors and moving to {self.device}...")
         X = torch.FloatTensor(scaled_features).to(self.device)
         y = torch.FloatTensor(labels).to(self.device).unsqueeze(-1)
         
         # Define loss function and optimizer
+        print(f"Setting up training...")
         criterion = nn.BCELoss()
         optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
         
@@ -199,6 +213,9 @@ class SilencePredictor:
         losses = []
         
         for epoch in range(epochs):
+            # Print the start of the epoch
+            print(f"Epoch {epoch+1}/{epochs} - Training in progress...")
+            
             # Shuffle indices
             indices = torch.randperm(X.size(0))
             
@@ -227,13 +244,17 @@ class SilencePredictor:
                 
                 epoch_loss += loss.item()
                 num_batches += 1
+                
+                # Print batch progress for large datasets (every 10 batches)
+                if X.size(0) > 100 and (num_batches % 10 == 0 or num_batches == 1):
+                    print(f"  Batch {num_batches}/{(X.size(0) + batch_size - 1) // batch_size} processed")
             
             avg_loss = epoch_loss / num_batches
             losses.append(avg_loss)
             
-            if (epoch + 1) % 10 == 0:
-                print(f"Epoch {epoch+1}/{epochs}, Loss: {avg_loss:.4f}")
+            print(f"Epoch {epoch+1}/{epochs} complete, Loss: {avg_loss:.6f}")
         
+        print(f"Training completed with {epochs} epochs")
         return losses
     
     def predict(self, features: np.ndarray, threshold: float = 0.5) -> List[bool]:

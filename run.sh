@@ -13,4 +13,4 @@ if ! python3 -c "import torch, PyQt5" &> /dev/null; then
 fi
 
 # Run the application
-python3 run.py 
+python3 gui_wrapper.py 
