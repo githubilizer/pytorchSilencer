@@ -85,6 +85,9 @@ def process_transcript(model_path, input_path, output_path=None, threshold=0.5):
         # Predict which silences to cut
         print("Predicting silences to cut...")
         keep_silence = predictor.predict(features, threshold=threshold)
+
+        # Convert keep predictions to cut markers for saving
+        cut_markers = [not keep for keep in keep_silence]
         
         # Calculate statistics
         total_silences = len(keep_silence)
@@ -97,7 +100,7 @@ def process_transcript(model_path, input_path, output_path=None, threshold=0.5):
         # Save processed transcript if output path provided
         if output_path:
             print(f"Saving processed transcript to {output_path}")
-            TranscriptProcessor.save_processed_transcript(transcript, output_path, keep_silence)
+            TranscriptProcessor.save_processed_transcript(transcript, output_path, cut_markers)
         
         return True
     except Exception as e:

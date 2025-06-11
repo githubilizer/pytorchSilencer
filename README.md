@@ -1,6 +1,6 @@
-# PyTorch Silencer (LSTM Edition)
+# PyTorch Silencer
 
-A PyTorch-based application for identifying and marking unnecessary silences in audio transcripts using LSTM networks.
+A PyTorch-based application for identifying and marking unnecessary silences in audio transcripts. It includes both a supervised LSTM classifier and an autoencoder-based anomaly detector so you can train on good examples only.
 
 ## Overview
 
@@ -9,6 +9,7 @@ This application is designed to learn from well-formatted transcripts with appro
 ## Features
 
 - **LSTM Neural Network**: Uses Long Short-Term Memory networks to analyze sequential patterns in transcript data
+- **Autoencoder Anomaly Detection**: Learns from good examples only and flags unusual silences
 - **Contextual Understanding**: Considers the relationships between words, silences, and punctuation
 - **Training Module**: Train the model on example transcripts with good silence patterns
 - **Prediction**: Process new transcripts to identify silences that should be cut
@@ -23,6 +24,7 @@ The application takes a sequence-based approach to analyze transcripts:
 2. **Contextual Features**: Features include word length, duration, preceding and following words, punctuation, and position in the transcript.
 3. **Bidirectional LSTM**: The model uses bidirectional LSTM cells to analyze context in both directions.
 4. **Sequence Prediction**: Predictions are made on sequences rather than individual silences, capturing the relationships between consecutive words.
+5. **Autoencoder Option**: Train on good data only and cut silences with high reconstruction error.
 
 ## Requirements
 
@@ -108,4 +110,14 @@ The model uses a bidirectional LSTM architecture:
 - **Hidden Size**: Configurable hidden layer size
 - **Output**: Sequence of predictions for each silence (keep or cut)
 
-This approach allows the model to understand the natural rhythm of speech and identify unnatural or excessive silences based on context. 
+This approach allows the model to understand the natural rhythm of speech and identify unnatural or excessive silences based on context.
+
+## Autoencoder Anomaly Detection
+
+For setups where you only have good transcripts, you can train the autoencoder model.
+It learns the typical timing between words and silences and flags any silence
+that does not fit this pattern.
+
+- **Input**: Individual feature vectors for each word/silence pair
+- **Training**: Reconstruction loss on good examples only
+- **Prediction**: Silences with high reconstruction error are marked for cutting
