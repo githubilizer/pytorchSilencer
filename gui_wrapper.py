@@ -61,7 +61,8 @@ class PytorchSilencerApp(QMainWindow):
         
         # Initialize paths
         self.training_data_dir = ""
-        self.model_path = "models/silence_model.pt"
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.model_path = f"models/silence_model_{timestamp}.pt"
         self.input_transcript = ""
         self.output_transcript = ""
         
@@ -170,7 +171,7 @@ class PytorchSilencerApp(QMainWindow):
         model_group = QGroupBox("Model Path")
         model_layout = QHBoxLayout(model_group)
         
-        self.model_path_edit = QLineEdit("models/silence_model.pt")
+        self.model_path_edit = QLineEdit(self.model_path)
         save_model_button = QPushButton("Save As...")
         save_model_button.clicked.connect(self.set_model_path)
         
@@ -315,9 +316,12 @@ class PytorchSilencerApp(QMainWindow):
             
     def set_model_path(self):
         file_path, _ = QFileDialog.getSaveFileName(
-            self, "Select Model Path", "models/silence_model.pt", "PyTorch Model (*.pt)"
+            self, "Select Model Path", self.model_path, "PyTorch Model (*.pt)"
         )
         if file_path:
+            base, ext = os.path.splitext(file_path)
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            file_path = f"{base}_{timestamp}{ext}"
             self.model_path = file_path
             self.model_path_edit.setText(file_path)
             
@@ -332,6 +336,10 @@ class PytorchSilencerApp(QMainWindow):
         epochs = self.epochs_spinner.value()
         batch_size = self.batch_size_spinner.value()
         model_path = self.model_path_edit.text()
+        base, ext = os.path.splitext(model_path)
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        model_path = f"{base}_{timestamp}{ext}"
+        self.model_path_edit.setText(model_path)
         
         # Clear log
         self.log_viewer.clear()
@@ -372,11 +380,12 @@ class PytorchSilencerApp(QMainWindow):
         if file_path:
             self.input_transcript = file_path
             self.input_transcript_field.setText(file_path)
-            
+
             # Auto-generate output path
             if not self.output_transcript:
                 base_name, ext = os.path.splitext(file_path)
-                output_path = f"{base_name}_processed{ext}"
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                output_path = f"{base_name}_processed_{timestamp}{ext}"
                 self.output_transcript = output_path
                 self.output_transcript_field.setText(output_path)
             
@@ -385,6 +394,9 @@ class PytorchSilencerApp(QMainWindow):
             self, "Select Output Transcript", "", "Text Files (*.txt)"
         )
         if file_path:
+            base, ext = os.path.splitext(file_path)
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            file_path = f"{base}_{timestamp}{ext}"
             self.output_transcript = file_path
             self.output_transcript_field.setText(file_path)
             
@@ -406,6 +418,10 @@ class PytorchSilencerApp(QMainWindow):
         model_path = self.model_path_field.text()
         input_path = self.input_transcript_field.text()
         output_path = self.output_transcript_field.text()
+        base, ext = os.path.splitext(output_path)
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = f"{base}_{timestamp}{ext}"
+        self.output_transcript_field.setText(output_path)
         threshold = self.threshold_spinner.value()
         
         # Clear log
