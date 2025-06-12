@@ -65,9 +65,16 @@ class PytorchSilencerApp(QMainWindow):
         self.model_path = f"models/silence_model_{timestamp}.pt"
         self.input_transcript = ""
         self.output_transcript = ""
-        self.processed_transcript_path = ""
-        self.input_video_path = ""
-        self.output_video_path = ""
+        # Default paths for Audio Silencer tab
+        self.processed_transcript_path = (
+            "/home/j/batchVideoFileProcessing/1181/"
+            "01_processed_20250611_201252_20250611_201258.txt"
+        )
+        self.input_video_path = "/home/j/batchVideoFileProcessing/1181/01.mkv"
+        base_name = os.path.splitext(os.path.basename(self.input_video_path))[0]
+        out_dir = os.path.dirname(self.input_video_path)
+        hhmm = datetime.datetime.now().strftime("%H%M")
+        self.output_video_path = os.path.join(out_dir, f"{base_name}_{hhmm}.mkv")
         
         # Setup UI
         self.setup_ui()
@@ -322,6 +329,9 @@ class PytorchSilencerApp(QMainWindow):
         self.audio_transcript_field = QLineEdit()
         self.audio_transcript_field.setReadOnly(True)
         self.audio_transcript_field.setPlaceholderText("Select processed transcript file...")
+        # Populate default processed transcript path
+        if self.processed_transcript_path:
+            self.audio_transcript_field.setText(self.processed_transcript_path)
 
         browse_transcript_button = QPushButton("Browse...")
         browse_transcript_button.clicked.connect(self.browse_audio_transcript)
@@ -336,6 +346,8 @@ class PytorchSilencerApp(QMainWindow):
         self.video_path_field = QLineEdit()
         self.video_path_field.setReadOnly(True)
         self.video_path_field.setPlaceholderText("Select video file...")
+        if self.input_video_path:
+            self.video_path_field.setText(self.input_video_path)
 
         browse_video_button = QPushButton("Browse...")
         browse_video_button.clicked.connect(self.browse_video_file)
@@ -350,6 +362,8 @@ class PytorchSilencerApp(QMainWindow):
         self.output_video_field = QLineEdit()
         self.output_video_field.setReadOnly(True)
         self.output_video_field.setPlaceholderText("Select output video file...")
+        if self.output_video_path:
+            self.output_video_field.setText(self.output_video_path)
 
         browse_output_video_button = QPushButton("Browse...")
         browse_output_video_button.clicked.connect(self.browse_output_video)
