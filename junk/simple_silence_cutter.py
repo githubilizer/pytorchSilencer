@@ -29,9 +29,12 @@ def process_with_duration_threshold(transcript_path, output_path, threshold_seco
         else:
             cut_markers.append(False)
     
-    # Save processed transcript
+    typical = TranscriptProcessor.estimate_typical_silence(transcript)
+
+    # Save processed transcript with predicted remaining silence
     print(f"Saving processed transcript to {output_path}")
-    TranscriptProcessor.save_processed_transcript(transcript, output_path, cut_markers)
+    remaining = [typical if m else 0.0 for m in cut_markers]
+    TranscriptProcessor.save_processed_transcript(transcript, output_path, cut_markers, remaining)
     
     # Print summary
     total_silences = sum(1 for i, entry in enumerate(transcript.entries[:-1]) if 

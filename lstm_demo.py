@@ -138,7 +138,9 @@ def process_transcript(model_path, input_path, output_path=None,
         # Save processed transcript if output path provided
         if output_path:
             print(f"Saving processed transcript to {output_path}")
-            TranscriptProcessor.save_processed_transcript(transcript, output_path, cut_markers)
+            typical = TranscriptProcessor.estimate_typical_silence(transcript)
+            remaining = [typical if m else 0.0 for m in cut_markers]
+            TranscriptProcessor.save_processed_transcript(transcript, output_path, cut_markers, remaining)
         
         return True
     except Exception as e:

@@ -29,8 +29,11 @@ def process_transcript(model_path, input_file, output_file, threshold=0.5):
     keep_predictions = predictor.predict(features, threshold)
     cut_predictions = [not p for p in keep_predictions]  # Invert to get cut markers
     
+    typical = TranscriptProcessor.estimate_typical_silence(transcript)
+
     print(f"Saving processed transcript to {output_file}")
-    TranscriptProcessor.save_processed_transcript(transcript, output_file, cut_predictions)
+    remaining = [typical if m else 0.0 for m in cut_predictions]
+    TranscriptProcessor.save_processed_transcript(transcript, output_file, cut_predictions, remaining)
     
     print("Done!")
     return True
