@@ -62,9 +62,18 @@ class PytorchSilencerApp(QMainWindow):
         # Initialize paths
         self.training_data_dir = ""
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.model_path = f"models/silence_model_{timestamp}.pt"
-        self.input_transcript = ""
-        self.output_transcript = ""
+        # Default model path for the prediction tab
+        self.model_path = (
+            "/home/j/Desktop/code/pytorchSilencer/models/"
+            "silence_model_20250611_200542_20250611_200552.pt"
+        )
+        # Default input transcript path for the prediction tab
+        self.input_transcript = "/home/j/Desktop/code/pytorchSilencer/01.txt"
+        # Default output transcript path for the prediction tab
+        self.output_transcript = (
+            "/home/j/Desktop/code/pytorchSilencer/models/"
+            "01_processed_20250611_201252_20250611_201258_processed_20250613_034539.txt"
+        )
         # Default paths for Audio Silencer tab
         self.processed_transcript_path = (
             "/home/j/batchVideoFileProcessing/1181/"
@@ -244,6 +253,9 @@ class PytorchSilencerApp(QMainWindow):
         self.model_path_field = QLineEdit()
         self.model_path_field.setReadOnly(True)
         self.model_path_field.setPlaceholderText("Select model file...")
+        # Populate default model path
+        if self.model_path:
+            self.model_path_field.setText(self.model_path)
         
         browse_model_button = QPushButton("Browse...")
         browse_model_button.clicked.connect(self.browse_model)
@@ -258,6 +270,9 @@ class PytorchSilencerApp(QMainWindow):
         self.input_transcript_field = QLineEdit()
         self.input_transcript_field.setReadOnly(True)
         self.input_transcript_field.setPlaceholderText("Select input transcript file...")
+        # Populate default input transcript path
+        if self.input_transcript:
+            self.input_transcript_field.setText(self.input_transcript)
         
         browse_input_button = QPushButton("Browse...")
         browse_input_button.clicked.connect(self.browse_input_transcript)
@@ -272,6 +287,9 @@ class PytorchSilencerApp(QMainWindow):
         self.output_transcript_field = QLineEdit()
         self.output_transcript_field.setReadOnly(True)
         self.output_transcript_field.setPlaceholderText("Select output transcript file...")
+        # Populate default output transcript path
+        if self.output_transcript:
+            self.output_transcript_field.setText(self.output_transcript)
         
         browse_output_button = QPushButton("Browse...")
         browse_output_button.clicked.connect(self.browse_output_transcript)
