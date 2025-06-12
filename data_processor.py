@@ -166,22 +166,56 @@ class TranscriptProcessor:
                 current.silence_after = next_entry.start_time - current.end_time
         
         return transcript
+
+    @staticmethod
+    def estimate_typical_silence(transcript: TranscriptData, max_duration: float = 1.0) -> float:
+        """Estimate typical short silence duration within a transcript."""
+        silences = []
+        for i in range(len(transcript.entries) - 1):
+            a = transcript.entries[i]
+            b = transcript.entries[i + 1]
+            if a.text.strip() and b.text.strip():
+                dur = b.start_time - a.end_time
+                if 0 < dur < max_duration:
+                    silences.append(dur)
+        if silences:
+            return float(np.median(silences))
+        return 0.1
     
     @staticmethod
-    def save_processed_transcript(transcript: TranscriptData, output_path: str, cut_markers: List[bool]):
-        """Save transcript with silence cut markers"""
-        with open(output_path, 'w') as f:
+    def save_processed_transcript(
+        transcript: TranscriptData,
+        output_path: str,
+        cut_markers: List[bool],
+        remaining_silences: Optional[List[float]] = None,
+    ):
+        """Save transcript with silence cut markers.
+
+        If ``remaining_silences`` is provided, each ``[SILENCE-CUT]`` line will
+        include the predicted amount of silence to keep.
+        """
+        with open(output_path, "w") as f:
             for i, entry in enumerate(transcript.entries):
                 f.write(f"[{entry.start_time:.2f} -> {entry.end_time:.2f}] {entry.text}\n")
-                
-                # Add silence cut marker if needed (and not the last entry)
+
                 if i < len(transcript.entries) - 1:
-                    next_entry = transcript.entries[i+1]
+                    next_entry = transcript.entries[i + 1]
                     silence_duration = next_entry.start_time - entry.end_time
-                    
-                    if silence_duration > 0.01:  # Only add line for non-trivial silences
+
+                    if silence_duration > 0.01:
                         if i < len(cut_markers) and cut_markers[i]:
-                            f.write(f"[{entry.end_time:.2f} -> {next_entry.start_time:.2f}] [SILENCE-CUT]\n")
+                            remain = None
+                            if remaining_silences and i < len(remaining_silences):
+                                remain = remaining_silences[i]
+                            if remain is not None:
+                                f.write(
+                                    f"[{entry.end_time:.2f} -> {next_entry.start_time:.2f}] "
+                                    f"[SILENCE-CUT {remain:.2f}s]\n"
+                                )
+                            else:
+                                f.write(
+                                    f"[{entry.end_time:.2f} -> {next_entry.start_time:.2f}] [SILENCE-CUT]\n"
+                                )
                         else:
                             f.write(f"[{entry.end_time:.2f} -> {next_entry.start_time:.2f}] \n")
                             

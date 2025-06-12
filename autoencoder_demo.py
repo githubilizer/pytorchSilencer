@@ -26,7 +26,9 @@ def process_transcript(model_path, input_path, output_path=None, threshold=0.01)
     keep = predictor.predict(features, threshold=threshold)
     cut_markers = [not k for k in keep]
     if output_path:
-        TranscriptProcessor.save_processed_transcript(transcript, output_path, cut_markers)
+        typical = TranscriptProcessor.estimate_typical_silence(transcript)
+        remaining = [typical if m else 0.0 for m in cut_markers]
+        TranscriptProcessor.save_processed_transcript(transcript, output_path, cut_markers, remaining)
     total = len(keep)
     cut = sum(cut_markers)
     print(f"Silences marked for cutting: {cut}/{total}")
