@@ -310,6 +310,20 @@ class PytorchSilencerApp(QMainWindow):
         threshold_layout.addWidget(threshold_label)
         threshold_layout.addWidget(self.threshold_spinner)
         threshold_layout.addStretch()
+
+        # Keep ratio
+        keep_group = QGroupBox("Keep Ratio")
+        keep_layout = QHBoxLayout(keep_group)
+
+        keep_label = QLabel("Keep Ratio:")
+        self.keep_ratio_spinner = QDoubleSpinBox()
+        self.keep_ratio_spinner.setRange(0.0, 1.0)
+        self.keep_ratio_spinner.setSingleStep(0.05)
+        self.keep_ratio_spinner.setValue(0.5)
+
+        keep_layout.addWidget(keep_label)
+        keep_layout.addWidget(self.keep_ratio_spinner)
+        keep_layout.addStretch()
         
         # Process button
         button_layout = QHBoxLayout()
@@ -328,12 +342,13 @@ class PytorchSilencerApp(QMainWindow):
         self.process_log_viewer.setReadOnly(True)
         
         log_layout.addWidget(self.process_log_viewer)
-        
+
         # Add all components to main layout
         layout.addWidget(model_group)
         layout.addWidget(input_group)
         layout.addWidget(output_group)
         layout.addWidget(threshold_group)
+        layout.addWidget(keep_group)
         layout.addLayout(button_layout)
         layout.addWidget(log_group, 1)  # Give log more stretch
 
@@ -564,6 +579,7 @@ class PytorchSilencerApp(QMainWindow):
         output_path = f"{base}_{timestamp}{ext}"
         self.output_transcript_field.setText(output_path)
         threshold = self.threshold_spinner.value()
+        keep_ratio = self.keep_ratio_spinner.value()
         
         # Clear log
         self.process_log_viewer.clear()
@@ -578,7 +594,8 @@ class PytorchSilencerApp(QMainWindow):
             "--model", model_path,
             "--input", input_path,
             "--output", output_path,
-            "--threshold", str(threshold)
+            "--threshold", str(threshold),
+            "--keep-ratio", str(keep_ratio),
         ]
         
         # Run command in thread

@@ -72,8 +72,14 @@ def train_model(data_dir, model_path, sequence_length=10, epochs=50, batch_size=
         print(traceback.format_exc())
         return False
 
-def process_transcript(model_path, input_path, output_path=None,
-                       threshold=0.5, duration_threshold=None):
+def process_transcript(
+    model_path,
+    input_path,
+    output_path=None,
+    threshold=0.5,
+    duration_threshold=None,
+    keep_ratio=0.5,
+):
     """Process a transcript using a trained model
 
     Parameters
@@ -89,6 +95,10 @@ def process_transcript(model_path, input_path, output_path=None,
     duration_threshold : float, optional
         Override for long silence detection. If None, the value
         stored in the model will be used.
+    keep_ratio : float, optional
+        Fraction of each cut silence to keep in the output. The
+        remaining duration will vary with the original silence
+        length.
     """
     try:
         # Load the model - Use GPU with the nightly build that supports RTX 5060
@@ -138,9 +148,17 @@ def process_transcript(model_path, input_path, output_path=None,
         # Save processed transcript if output path provided
         if output_path:
             print(f"Saving processed transcript to {output_path}")
-            typical = TranscriptProcessor.estimate_typical_silence(transcript)
-            remaining = [typical if m else 0.0 for m in cut_markers]
-            TranscriptProcessor.save_processed_transcript(transcript, output_path, cut_markers, remaining)
+            remaining = []
+            for i, entry in enumerate(transcript.entries[:-1]):
+                silence_duration = transcript.entries[i + 1].start_time - entry.end_time
+                if cut_markers[i]:
+                    remain = max(silence_duration * keep_ratio, 0.0)
+                    remaining.append(remain)
+                else:
+                    remaining.append(0.0)
+            TranscriptProcessor.save_processed_transcript(
+                transcript, output_path, cut_markers, remaining
+            )
         
         return True
     except Exception as e:
@@ -171,6 +189,12 @@ def main():
     process_parser.add_argument(
         "--duration-threshold", type=float, default=None,
         help="Override automatic long silence threshold (seconds)")
+    process_parser.add_argument(
+        "--keep-ratio",
+        type=float,
+        default=0.5,
+        help="Fraction of each cut silence to keep (0-1)",
+    )
     
     args = parser.parse_args()
     
@@ -184,6 +208,7 @@ def main():
             args.output,
             args.threshold,
             args.duration_threshold,
+            args.keep_ratio,
         )
     else:
         parser.print_help()

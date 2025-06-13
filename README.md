@@ -69,6 +69,8 @@ See `requirements.txt` for detailed dependencies.
 When running from the command line, the LSTM model automatically uses a
 long-silence threshold derived from the training data. You can override
 this by passing `--duration-threshold` with a custom number of seconds.
+Use `--keep-ratio` to specify what fraction of each cut silence should remain
+in the saved transcript.
 
 ## Transcript Format
 
