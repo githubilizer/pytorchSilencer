@@ -43,8 +43,8 @@ See `requirements.txt` for detailed dependencies.
    ```
    pip install -r requirements.txt
    ```
-   This installs all dependencies, including **moviepy** which is
-   needed for the video cutting feature.
+   This installs all Python dependencies. For the video cutting feature, make
+   sure [ffmpeg](https://ffmpeg.org/) is installed and available on your PATH.
 
 ## Usage
 
