@@ -43,6 +43,8 @@ See `requirements.txt` for detailed dependencies.
    ```
    pip install -r requirements.txt
    ```
+   This installs all dependencies, including **moviepy** which is
+   needed for the video cutting feature.
 
 ## Usage
 

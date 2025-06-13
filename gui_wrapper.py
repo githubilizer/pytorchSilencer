@@ -2,6 +2,7 @@ import sys
 import os
 import subprocess
 import datetime
+import json
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                             QPushButton, QFileDialog, QLabel, QTextEdit, QTabWidget, 
                             QSpinBox, QDoubleSpinBox, QProgressBar,
@@ -92,9 +93,12 @@ class PytorchSilencerApp(QMainWindow):
         super().__init__()
         self.setWindowTitle("PyTorch Silencer - GPU Edition")
         self.setGeometry(100, 100, 1200, 800)
-        
+
         # Set dark mode
         self.setup_dark_theme()
+
+        # Path persistence file
+        self.PATHS_FILE = os.path.join(os.path.dirname(__file__), "last_paths.json")
 
         # Initialize paths
         self.training_data_dir = ""
@@ -114,18 +118,24 @@ class PytorchSilencerApp(QMainWindow):
 
         # Default input transcript path for the prediction tab
         self.input_transcript = ""
+        self.output_transcript = ""
 
-        if self.input_transcript:
+        # Default paths for Audio Silencer tab
+        self.processed_transcript_path = ""
+        self.input_video_path = ""
+        self.output_video_path = ""
+
+        # Load persisted paths if available
+        self.load_paths()
+
+        # If we loaded an input transcript but no processed output use timestamp
+        if self.input_transcript and not self.output_transcript:
             base, ext = os.path.splitext(self.input_transcript)
             hhmm = datetime.datetime.now().strftime("%I%M%p").lower()
             self.output_transcript = f"{base}_processed_{hhmm}{ext}"
-        else:
-            self.output_transcript = ""
 
-        # Default paths for Audio Silencer tab
-        self.processed_transcript_path = self.output_transcript
-        self.input_video_path = ""
-        self.output_video_path = ""
+        if not self.processed_transcript_path:
+            self.processed_transcript_path = self.output_transcript
 
         # Notes file path and editor placeholder
         self.NOTES_FILE = os.path.join(os.path.dirname(__file__), "notes.txt")
@@ -494,10 +504,11 @@ class PytorchSilencerApp(QMainWindow):
         if directory:
             self.training_data_dir = directory
             self.training_data_path.setText(directory)
-            
+
             # Check for transcript files
             count = sum(1 for f in os.listdir(directory) if f.endswith('.txt'))
             self.data_status_label.setText(f"Found {count} transcript files")
+            self.save_paths()
             
     def set_model_path(self):
         file_path, _ = QFileDialog.getSaveFileName(
@@ -509,6 +520,7 @@ class PytorchSilencerApp(QMainWindow):
             file_path = f"{base}_{timestamp}{ext}"
             self.model_path = file_path
             self.model_path_edit.setText(file_path)
+            self.save_paths()
             
     def train_model(self):
         # Validate inputs
@@ -578,6 +590,7 @@ class PytorchSilencerApp(QMainWindow):
             self.output_transcript_field.setText(output_path)
             self.processed_transcript_path = output_path
             self.audio_transcript_field.setText(output_path)
+            self.save_paths()
             
     def browse_output_transcript(self):
         file_path, _ = QFileDialog.getSaveFileName(
@@ -591,6 +604,7 @@ class PytorchSilencerApp(QMainWindow):
             self.output_transcript_field.setText(file_path)
             self.processed_transcript_path = file_path
             self.audio_transcript_field.setText(file_path)
+            self.save_paths()
 
     def browse_audio_transcript(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -599,11 +613,7 @@ class PytorchSilencerApp(QMainWindow):
         if file_path:
             self.processed_transcript_path = file_path
             self.audio_transcript_field.setText(file_path)
-            if not self.output_video_path:
-                base, _ = os.path.splitext(file_path)
-                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                self.output_video_path = f"{base}_cut_{timestamp}.mp4"
-                self.output_video_field.setText(self.output_video_path)
+            self.save_paths()
 
     def browse_video_file(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -612,16 +622,19 @@ class PytorchSilencerApp(QMainWindow):
         if file_path:
             self.input_video_path = file_path
             self.video_path_field.setText(file_path)
+            base, _ = os.path.splitext(file_path)
+            self.output_video_path = f"{base}_videocut.mp4"
+            self.output_video_field.setText(self.output_video_path)
+            self.save_paths()
 
     def browse_output_video(self):
         file_path, _ = QFileDialog.getSaveFileName(
             self, "Select Output Video", "", "Video Files (*.mp4 *.mov *.mkv)"
         )
         if file_path:
-            base, ext = os.path.splitext(file_path)
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            self.output_video_path = f"{base}_{timestamp}{ext}"
+            self.output_video_path = file_path
             self.output_video_field.setText(self.output_video_path)
+            self.save_paths()
             
     def process_transcript(self):
         # Validate inputs
@@ -646,6 +659,7 @@ class PytorchSilencerApp(QMainWindow):
         self.output_transcript_field.setText(output_path)
         self.processed_transcript_path = output_path
         self.audio_transcript_field.setText(output_path)
+        self.save_paths()
         threshold = self.threshold_spinner.value()
         keep_ratio = self.keep_ratio_spinner.value()
         
@@ -697,11 +711,8 @@ class PytorchSilencerApp(QMainWindow):
         transcript_path = self.processed_transcript_path
         video_path = self.input_video_path
         output_path = self.output_video_path
-        base, ext = os.path.splitext(output_path)
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = f"{base}_{timestamp}{ext}"
-        self.output_video_path = output_path
         self.output_video_field.setText(output_path)
+        self.save_paths()
 
         self.audio_log_viewer.clear()
         self.add_audio_log("Starting video cutting...")
@@ -774,6 +785,7 @@ class PytorchSilencerApp(QMainWindow):
         if success:
             self.add_audio_log("Video cutting completed!")
             QMessageBox.information(self, "Success", "Video saved successfully!")
+            self.save_paths()
         else:
             self.add_audio_log(f"Video cutting failed: {message}")
             QMessageBox.critical(self, "Error", f"Video cutting failed: {message}")
@@ -793,6 +805,7 @@ class PytorchSilencerApp(QMainWindow):
                     f.write(self.model_path)
             except Exception:
                 pass
+            self.save_paths()
         else:
             self.add_log_message(f"Training failed: {message}")
             QMessageBox.critical(self, "Error", f"Training failed: {message}")
@@ -806,6 +819,7 @@ class PytorchSilencerApp(QMainWindow):
             QMessageBox.information(self, "Success", "Transcript processing completed successfully!")
             self.processed_transcript_path = self.output_transcript_field.text()
             self.audio_transcript_field.setText(self.processed_transcript_path)
+            self.save_paths()
         else:
             self.add_process_log(f"Processing failed: {message}")
             QMessageBox.critical(self, "Error", f"Processing failed: {message}")
@@ -823,6 +837,42 @@ class PytorchSilencerApp(QMainWindow):
             self.add_log_message(f"Loaded Full Scripts data with {count} transcript files")
         else:
             QMessageBox.warning(self, "Error", "GOODFULLSCRIPTSDATA folder not found at expected location")
+
+    def load_paths(self):
+        """Load previously used paths from disk if available"""
+        if os.path.exists(self.PATHS_FILE):
+            try:
+                with open(self.PATHS_FILE, "r") as f:
+                    data = json.load(f)
+                self.training_data_dir = data.get("training_data_dir", self.training_data_dir)
+                self.input_transcript = data.get("input_transcript", self.input_transcript)
+                self.output_transcript = data.get("output_transcript", self.output_transcript)
+                self.processed_transcript_path = data.get("processed_transcript_path", self.processed_transcript_path)
+                self.input_video_path = data.get("input_video_path", self.input_video_path)
+                self.output_video_path = data.get("output_video_path", self.output_video_path)
+            except Exception:
+                pass
+
+    def save_paths(self):
+        """Persist current paths to disk"""
+        data = {
+            "training_data_dir": self.training_data_dir,
+            "input_transcript": self.input_transcript,
+            "output_transcript": self.output_transcript,
+            "processed_transcript_path": self.processed_transcript_path,
+            "input_video_path": self.input_video_path,
+            "output_video_path": self.output_video_path,
+        }
+        try:
+            with open(self.PATHS_FILE, "w") as f:
+                json.dump(data, f)
+        except Exception:
+            pass
+
+    def closeEvent(self, event):
+        """Save paths when the application closes"""
+        self.save_paths()
+        super().closeEvent(event)
 
 def main():
     # Create application directory structure
