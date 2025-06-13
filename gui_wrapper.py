@@ -4,8 +4,8 @@ import subprocess
 import datetime
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                             QPushButton, QFileDialog, QLabel, QTextEdit, QTabWidget, 
-                            QSpinBox, QDoubleSpinBox, QProgressBar, 
-                            QGroupBox, QMessageBox, QLineEdit)
+                            QSpinBox, QDoubleSpinBox, QProgressBar,
+                            QGroupBox, QMessageBox, QLineEdit, QAction)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QColor, QPalette, QFont
 
@@ -50,6 +50,43 @@ class CommandThread(QThread):
         except Exception as e:
             self.command_finished.emit(False, f"Error executing command: {str(e)}")
 
+
+class NotesTextEdit(QTextEdit):
+    """Simple text editor with autosave and a custom context menu."""
+
+    def __init__(self, notes_file, parent=None):
+        super().__init__(parent)
+        self.notes_file = notes_file
+        self.textChanged.connect(self.auto_save)
+        self.load_notes()
+
+    def load_notes(self):
+        if os.path.exists(self.notes_file):
+            try:
+                with open(self.notes_file, "r", encoding="utf-8") as f:
+                    self.setPlainText(f.read())
+            except Exception:
+                pass
+
+    def auto_save(self):
+        try:
+            with open(self.notes_file, "w", encoding="utf-8") as f:
+                f.write(self.toPlainText())
+        except Exception:
+            pass
+
+    def contextMenuEvent(self, event):
+        menu = self.createStandardContextMenu()
+        select_all_copy = QAction("Select All && Copy", self)
+        select_all_copy.triggered.connect(self.select_all_and_copy)
+        menu.addSeparator()
+        menu.addAction(select_all_copy)
+        menu.exec_(event.globalPos())
+
+    def select_all_and_copy(self):
+        self.selectAll()
+        self.copy()
+
 class PytorchSilencerApp(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -89,7 +126,11 @@ class PytorchSilencerApp(QMainWindow):
         self.processed_transcript_path = self.output_transcript
         self.input_video_path = ""
         self.output_video_path = ""
-        
+
+        # Notes file path and editor placeholder
+        self.NOTES_FILE = os.path.join(os.path.dirname(__file__), "notes.txt")
+        self.notes_editor = None
+
         # Setup UI
         self.setup_ui()
         
@@ -122,25 +163,30 @@ class PytorchSilencerApp(QMainWindow):
         main_layout = QVBoxLayout(central_widget)
         
         # Create tabs
-        tabs = QTabWidget()
+        self.tabs = QTabWidget()
         
         # Create training tab
         training_tab = QWidget()
         self.setup_training_tab(training_tab)
-        tabs.addTab(training_tab, "Train Model")
+        self.tabs.addTab(training_tab, "Train Model")
         
         # Create prediction tab
         prediction_tab = QWidget()
         self.setup_prediction_tab(prediction_tab)
-        tabs.addTab(prediction_tab, "Process Transcript")
+        self.tabs.addTab(prediction_tab, "Process Transcript")
 
         # Create audio silencer tab
         audio_tab = QWidget()
         self.setup_audio_tab(audio_tab)
-        tabs.addTab(audio_tab, "Audio Silencer")
+        self.tabs.addTab(audio_tab, "Audio Silencer")
+
+        # Create notes tab (always last)
+        notes_tab = QWidget()
+        self.setup_notes_tab(notes_tab)
+        self.tabs.addTab(notes_tab, "Notes")
         
         # Add tabs to main layout
-        main_layout.addWidget(tabs)
+        main_layout.addWidget(self.tabs)
         
     def setup_training_tab(self, tab):
         # Layout
@@ -437,6 +483,11 @@ class PytorchSilencerApp(QMainWindow):
         layout.addWidget(output_video_group)
         layout.addLayout(button_layout)
         layout.addWidget(log_group, 1)
+
+    def setup_notes_tab(self, tab):
+        layout = QVBoxLayout(tab)
+        self.notes_editor = NotesTextEdit(self.NOTES_FILE)
+        layout.addWidget(self.notes_editor)
         
     def browse_training_data(self):
         directory = QFileDialog.getExistingDirectory(self, "Select Training Data Directory")
