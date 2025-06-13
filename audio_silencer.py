@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """Utility to trim video/audio using processed transcript with silence markers.
 
-Cuts out portions of the video that are marked with [SILENCE-CUT] in the
+Cuts out portions of the video that are marked with ``[SILENCE-CUT]`` in the
 transcript. Each cut removes 80% of the silence from the middle of the
-segment and crossfades the remaining 10%% at each edge.
+segment and crossfades the remaining 10% at each edge.
+
+This version relies on ``ffmpeg`` via ``subprocess`` instead of ``moviepy``.
 """
 import argparse
 import re
+import subprocess
 from typing import List, Tuple
-
-from moviepy.editor import VideoFileClip, CompositeVideoClip
 
 def parse_cut_segments(path: str) -> List[Tuple[float, float]]:
     """Return list of (start, end) tuples for segments marked as SILENCE-CUT."""
@@ -26,38 +27,110 @@ def parse_cut_segments(path: str) -> List[Tuple[float, float]]:
                 segments.append((start, end))
     return segments
 
+def get_video_duration(path: str) -> float:
+    """Return duration of the video in seconds using ffprobe."""
+    result = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            path,
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=True,
+    )
+    return float(result.stdout.strip())
+
+
 def cut_video(video_path: str, transcript_path: str, output_path: str) -> None:
-    video = VideoFileClip(video_path)
     segments = parse_cut_segments(transcript_path)
+    video_duration = get_video_duration(video_path)
 
     if not segments:
-        video.write_videofile(output_path, codec="libx264")
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                video_path,
+                "-c:v",
+                "libx264",
+                "-c:a",
+                "aac",
+                output_path,
+            ],
+            check=True,
+        )
         return
 
-    clips = []
-    crossfades = []
+    keep_segments: List[Tuple[float, float]] = []
+    crossfades: List[float] = []
     current = 0.0
     for start, end in segments:
-        duration = end - start
-        keep_start = start + 0.1 * duration
-        keep_end = end - 0.1 * duration
+        seg_dur = end - start
+        keep_start = start + 0.1 * seg_dur
+        keep_end = end - 0.1 * seg_dur
         if keep_start > current:
-            clips.append(video.subclip(current, keep_start))
-            crossfades.append(min(duration * 0.1, 1.0))
+            keep_segments.append((current, keep_start))
+            crossfades.append(min(seg_dur * 0.1, 1.0))
         current = keep_end
-    if current < video.duration:
-        clips.append(video.subclip(current, video.duration))
+    if current < video_duration:
+        keep_segments.append((current, video_duration))
 
-    final = clips[0]
-    for idx, clip in enumerate(clips[1:]):
-        cf = crossfades[idx] if idx < len(crossfades) else 0
-        clip = clip.set_start(final.duration - cf).crossfadein(cf)
-        final = CompositeVideoClip([final, clip])
-    final.write_videofile(output_path, codec="libx264")
+    filter_parts = []
+    for idx, (s, e) in enumerate(keep_segments):
+        filter_parts.append(
+            f"[0:v]trim=start={s}:end={e},setpts=PTS-STARTPTS[v{idx}]"
+        )
+        filter_parts.append(
+            f"[0:a]atrim=start={s}:end={e},asetpts=PTS-STARTPTS[a{idx}]"
+        )
+
+    vf = "v0"
+    af = "a0"
+    out_dur = keep_segments[0][1] - keep_segments[0][0]
+    for idx in range(1, len(keep_segments)):
+        cf = crossfades[idx - 1] if idx - 1 < len(crossfades) else 0
+        offset = max(out_dur - cf, 0)
+        filter_parts.append(
+            f"[{vf}][v{idx}]xfade=transition=fade:duration={cf}:offset={offset}[vx{idx}]"
+        )
+        filter_parts.append(f"[{af}][a{idx}]acrossfade=d={cf}[ax{idx}]")
+        vf = f"vx{idx}"
+        af = f"ax{idx}"
+        out_dur = out_dur - cf + (keep_segments[idx][1] - keep_segments[idx][0])
+
+    filter_complex = ";".join(filter_parts)
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        video_path,
+        "-filter_complex",
+        filter_complex,
+        "-map",
+        f"[{vf}]",
+        "-map",
+        f"[{af}]",
+        "-c:v",
+        "libx264",
+        "-c:a",
+        "aac",
+        output_path,
+    ]
+    subprocess.run(cmd, check=True)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Trim video using processed transcript")
+    parser = argparse.ArgumentParser(
+        description="Trim video using processed transcript (uses ffmpeg)"
+    )
     parser.add_argument("--video", required=True, help="Input video file")
     parser.add_argument("--transcript", required=True, help="Processed transcript with SILENCE-CUT markers")
     parser.add_argument("--output", required=True, help="Output video file")
