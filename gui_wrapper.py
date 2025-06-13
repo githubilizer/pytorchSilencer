@@ -330,14 +330,18 @@ class PytorchSilencerApp(QMainWindow):
         keep_layout.addWidget(self.keep_ratio_spinner)
         keep_layout.addStretch()
         
-        # Process button
+        # Process and open buttons
         button_layout = QHBoxLayout()
-        
+
         self.process_btn = QPushButton("Process Transcript")
         self.process_btn.clicked.connect(self.process_transcript)
-        
+
+        self.open_last_output_btn = QPushButton("Open Last Output Transcript")
+        self.open_last_output_btn.clicked.connect(self.open_last_output_transcript)
+
         button_layout.addStretch()
         button_layout.addWidget(self.process_btn)
+        button_layout.addWidget(self.open_last_output_btn)
         
         # Log viewer
         log_group = QGroupBox("Log")
@@ -616,6 +620,17 @@ class PytorchSilencerApp(QMainWindow):
         self.process_thread.progress_update.connect(self.add_process_log)
         self.process_thread.command_finished.connect(self.on_processing_finished)
         self.process_thread.start()
+
+    def open_last_output_transcript(self):
+        """Open the most recently processed transcript using gnome-text-editor"""
+        path = self.processed_transcript_path or self.output_transcript_field.text()
+        if not path or not os.path.exists(path):
+            QMessageBox.warning(self, "Error", "No output transcript available to open.")
+            return
+        try:
+            subprocess.Popen(["gnome-text-editor", path])
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to open transcript: {str(e)}")
 
     def process_video(self):
         if not self.processed_transcript_path:
