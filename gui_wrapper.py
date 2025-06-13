@@ -58,32 +58,37 @@ class PytorchSilencerApp(QMainWindow):
         
         # Set dark mode
         self.setup_dark_theme()
-        
+
         # Initialize paths
         self.training_data_dir = ""
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        # Default model path for the prediction tab
-        self.model_path = (
-            "/home/j/Desktop/code/pytorchSilencer/models/"
-            "silence_model_20250611_200542_20250611_200552.pt"
-        )
+
+        # Load last used model if available
+        self.model_path = ""
+        self.LAST_MODEL_FILE = os.path.join(os.path.dirname(__file__), "last_model_path.txt")
+        if os.path.exists(self.LAST_MODEL_FILE):
+            try:
+                with open(self.LAST_MODEL_FILE, "r") as f:
+                    self.model_path = f.read().strip()
+            except Exception:
+                self.model_path = ""
+
+        if not self.model_path:
+            self.model_path = "/home/j/Desktop/code/pytorchSilencer/models/silence_model.pt"
+
         # Default input transcript path for the prediction tab
-        self.input_transcript = "/home/j/Desktop/code/pytorchSilencer/01.txt"
-        # Default output transcript path for the prediction tab
-        self.output_transcript = (
-            "/home/j/Desktop/code/pytorchSilencer/models/"
-            "01_processed_20250611_201252_20250611_201258_processed_20250613_034539.txt"
-        )
+        self.input_transcript = ""
+
+        if self.input_transcript:
+            base, ext = os.path.splitext(self.input_transcript)
+            hhmm = datetime.datetime.now().strftime("%I%M%p").lower()
+            self.output_transcript = f"{base}_processed_{hhmm}{ext}"
+        else:
+            self.output_transcript = ""
+
         # Default paths for Audio Silencer tab
-        self.processed_transcript_path = (
-            "/home/j/batchVideoFileProcessing/1181/"
-            "01_processed_20250611_201252_20250611_201258.txt"
-        )
-        self.input_video_path = "/home/j/batchVideoFileProcessing/1181/01.mkv"
-        base_name = os.path.splitext(os.path.basename(self.input_video_path))[0]
-        out_dir = os.path.dirname(self.input_video_path)
-        hhmm = datetime.datetime.now().strftime("%H%M")
-        self.output_video_path = os.path.join(out_dir, f"{base_name}_{hhmm}.mkv")
+        self.processed_transcript_path = self.output_transcript
+        self.input_video_path = ""
+        self.output_video_path = ""
         
         # Setup UI
         self.setup_ui()
@@ -251,7 +256,7 @@ class PytorchSilencerApp(QMainWindow):
         model_layout = QHBoxLayout(model_group)
         
         self.model_path_field = QLineEdit()
-        self.model_path_field.setReadOnly(True)
+        self.model_path_field.setReadOnly(False)
         self.model_path_field.setPlaceholderText("Select model file...")
         # Populate default model path
         if self.model_path:
@@ -268,7 +273,7 @@ class PytorchSilencerApp(QMainWindow):
         input_layout = QHBoxLayout(input_group)
         
         self.input_transcript_field = QLineEdit()
-        self.input_transcript_field.setReadOnly(True)
+        self.input_transcript_field.setReadOnly(False)
         self.input_transcript_field.setPlaceholderText("Select input transcript file...")
         # Populate default input transcript path
         if self.input_transcript:
@@ -285,7 +290,7 @@ class PytorchSilencerApp(QMainWindow):
         output_layout = QHBoxLayout(output_group)
         
         self.output_transcript_field = QLineEdit()
-        self.output_transcript_field.setReadOnly(True)
+        self.output_transcript_field.setReadOnly(False)
         self.output_transcript_field.setPlaceholderText("Select output transcript file...")
         # Populate default output transcript path
         if self.output_transcript:
@@ -360,7 +365,7 @@ class PytorchSilencerApp(QMainWindow):
         transcript_layout = QHBoxLayout(transcript_group)
 
         self.audio_transcript_field = QLineEdit()
-        self.audio_transcript_field.setReadOnly(True)
+        self.audio_transcript_field.setReadOnly(False)
         self.audio_transcript_field.setPlaceholderText("Select processed transcript file...")
         # Populate default processed transcript path
         if self.processed_transcript_path:
@@ -377,7 +382,7 @@ class PytorchSilencerApp(QMainWindow):
         video_layout = QHBoxLayout(video_group)
 
         self.video_path_field = QLineEdit()
-        self.video_path_field.setReadOnly(True)
+        self.video_path_field.setReadOnly(False)
         self.video_path_field.setPlaceholderText("Select video file...")
         if self.input_video_path:
             self.video_path_field.setText(self.input_video_path)
@@ -393,7 +398,7 @@ class PytorchSilencerApp(QMainWindow):
         output_video_layout = QHBoxLayout(output_video_group)
 
         self.output_video_field = QLineEdit()
-        self.output_video_field.setReadOnly(True)
+        self.output_video_field.setReadOnly(False)
         self.output_video_field.setPlaceholderText("Select output video file...")
         if self.output_video_path:
             self.output_video_field.setText(self.output_video_path)
@@ -497,6 +502,11 @@ class PytorchSilencerApp(QMainWindow):
         if file_path:
             self.model_path = file_path
             self.model_path_field.setText(file_path)
+            try:
+                with open(self.LAST_MODEL_FILE, "w") as f:
+                    f.write(file_path)
+            except Exception:
+                pass
             
     def browse_input_transcript(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -506,13 +516,13 @@ class PytorchSilencerApp(QMainWindow):
             self.input_transcript = file_path
             self.input_transcript_field.setText(file_path)
 
-            # Auto-generate output path
-            if not self.output_transcript:
-                base_name, ext = os.path.splitext(file_path)
-                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                output_path = f"{base_name}_processed_{timestamp}{ext}"
-                self.output_transcript = output_path
-                self.output_transcript_field.setText(output_path)
+            base_name, ext = os.path.splitext(file_path)
+            timestamp = datetime.datetime.now().strftime("%I%M%p").lower()
+            output_path = f"{base_name}_processed_{timestamp}{ext}"
+            self.output_transcript = output_path
+            self.output_transcript_field.setText(output_path)
+            self.processed_transcript_path = output_path
+            self.audio_transcript_field.setText(output_path)
             
     def browse_output_transcript(self):
         file_path, _ = QFileDialog.getSaveFileName(
@@ -520,10 +530,12 @@ class PytorchSilencerApp(QMainWindow):
         )
         if file_path:
             base, ext = os.path.splitext(file_path)
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            file_path = f"{base}_{timestamp}{ext}"
-        self.output_transcript = file_path
-        self.output_transcript_field.setText(file_path)
+            timestamp = datetime.datetime.now().strftime("%I%M%p").lower()
+            file_path = f"{base}_processed_{timestamp}{ext}"
+            self.output_transcript = file_path
+            self.output_transcript_field.setText(file_path)
+            self.processed_transcript_path = file_path
+            self.audio_transcript_field.setText(file_path)
 
     def browse_audio_transcript(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -573,11 +585,12 @@ class PytorchSilencerApp(QMainWindow):
         # Get parameters
         model_path = self.model_path_field.text()
         input_path = self.input_transcript_field.text()
-        output_path = self.output_transcript_field.text()
-        base, ext = os.path.splitext(output_path)
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = f"{base}_{timestamp}{ext}"
+        base, ext = os.path.splitext(input_path)
+        timestamp = datetime.datetime.now().strftime("%I%M%p").lower()
+        output_path = f"{base}_processed_{timestamp}{ext}"
         self.output_transcript_field.setText(output_path)
+        self.processed_transcript_path = output_path
+        self.audio_transcript_field.setText(output_path)
         threshold = self.threshold_spinner.value()
         keep_ratio = self.keep_ratio_spinner.value()
         
@@ -707,6 +720,13 @@ class PytorchSilencerApp(QMainWindow):
             self.progress_bar.setValue(100)
             self.add_log_message("Training completed successfully!")
             QMessageBox.information(self, "Success", "Model training completed successfully!")
+            self.model_path = self.model_path_edit.text()
+            self.model_path_field.setText(self.model_path)
+            try:
+                with open(self.LAST_MODEL_FILE, "w") as f:
+                    f.write(self.model_path)
+            except Exception:
+                pass
         else:
             self.add_log_message(f"Training failed: {message}")
             QMessageBox.critical(self, "Error", f"Training failed: {message}")
@@ -718,6 +738,8 @@ class PytorchSilencerApp(QMainWindow):
         if success:
             self.add_process_log("Processing completed successfully!")
             QMessageBox.information(self, "Success", "Transcript processing completed successfully!")
+            self.processed_transcript_path = self.output_transcript_field.text()
+            self.audio_transcript_field.setText(self.processed_transcript_path)
         else:
             self.add_process_log(f"Processing failed: {message}")
             QMessageBox.critical(self, "Error", f"Processing failed: {message}")
