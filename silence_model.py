@@ -82,7 +82,46 @@ class LSTMSilenceClassifier(nn.Module):
         
         # Reshape back to (batch_size, seq_len, 1)
         outputs = fc_out.view(batch_size, seq_len, 1)
-        
+
+        return outputs
+
+class LSTMSilenceRegressor(nn.Module):
+    """Predict the ideal remaining silence duration for each pause."""
+
+    def __init__(self, input_size: int, hidden_size: int = 64, num_layers: int = 2, dropout: float = 0.2):
+        super().__init__()
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+
+        self.lstm = nn.LSTM(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=dropout if num_layers > 1 else 0,
+            bidirectional=True,
+        )
+
+        self.fc = nn.Sequential(
+            nn.Linear(hidden_size * 2, hidden_size),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_size, 1),
+            nn.ReLU(),
+        )
+
+    def forward(self, x, lengths=None):
+        if lengths is not None:
+            x_packed = nn.utils.rnn.pack_padded_sequence(x, lengths.cpu(), batch_first=True, enforce_sorted=False)
+            lstm_out, _ = self.lstm(x_packed)
+            lstm_out, _ = nn.utils.rnn.pad_packed_sequence(lstm_out, batch_first=True)
+        else:
+            lstm_out, _ = self.lstm(x)
+
+        batch_size, seq_len, _ = lstm_out.size()
+        fc_in = lstm_out.contiguous().view(batch_size * seq_len, self.hidden_size * 2)
+        fc_out = self.fc(fc_in)
+        outputs = fc_out.view(batch_size, seq_len, 1)
         return outputs
 
 class SequenceScaler:
@@ -431,6 +470,127 @@ class SilencePredictor:
                 self.scaler = pickle.load(f)
                 
         print(f"Model loaded from {model_path}")
+
+
+class SilenceDurationPredictor:
+    """Predict how much silence should remain after each word."""
+
+    def __init__(self, model_path: Optional[str] = None, sequence_length: int = 10,
+                 input_size: int = 14, force_cpu: bool = False,
+                 long_silence_threshold: Optional[float] = None):
+        self.input_size = input_size
+        self.sequence_length = sequence_length
+
+        self.cuda_info = get_device_info()
+        if not force_cpu and self.cuda_info["cuda_available"]:
+            self.device = torch.device("cuda:0")
+        else:
+            self.device = torch.device("cpu")
+
+        self.model = LSTMSilenceRegressor(self.input_size).to(self.device)
+        self.scaler = SequenceScaler()
+        self.long_silence_threshold = long_silence_threshold
+
+        if model_path and os.path.exists(model_path):
+            self.load_model(model_path)
+
+    def train(self, features: np.ndarray, durations: np.ndarray,
+              epochs: int = 100, batch_size: int = 8,
+              learning_rate: float = 0.001) -> List[float]:
+        self.scaler.fit(features)
+        X = torch.FloatTensor(self.scaler.transform(features)).to(self.device)
+        y = torch.FloatTensor(durations).to(self.device).unsqueeze(-1)
+
+        criterion = nn.MSELoss()
+        optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
+        self.model.train()
+        losses = []
+
+        for _ in range(epochs):
+            indices = torch.randperm(X.size(0))
+            epoch_loss = 0.0
+            num_batches = 0
+            for start_idx in range(0, X.size(0), batch_size):
+                end_idx = min(start_idx + batch_size, X.size(0))
+                batch_idx = indices[start_idx:end_idx]
+                X_batch = X[batch_idx]
+                y_batch = y[batch_idx]
+                outputs = self.model(X_batch)
+                loss = criterion(outputs, y_batch)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                epoch_loss += loss.item()
+                num_batches += 1
+            losses.append(epoch_loss / num_batches)
+        return losses
+
+    def predict_durations(self, features: np.ndarray) -> List[float]:
+        if len(features) == 0:
+            return []
+
+        seq_length = self.sequence_length
+        n_features = features.shape[1]
+
+        if len(features) < seq_length:
+            padding = np.zeros((seq_length - len(features), n_features))
+            features_padded = np.vstack([features, padding])
+            sequences = np.array([features_padded])
+        else:
+            n_sequences = len(features) - seq_length + 1
+            sequences = np.array([features[i:i+seq_length] for i in range(n_sequences)])
+
+        scaled_sequences = self.scaler.transform(sequences)
+        X = torch.FloatTensor(scaled_sequences).to(self.device)
+        self.model.eval()
+        with torch.no_grad():
+            outputs = self.model(X).squeeze(-1).cpu().numpy()
+
+        preds = []
+        if len(features) <= seq_length:
+            preds = outputs[0, :len(features)].tolist()
+        else:
+            accumulated = np.zeros(len(features))
+            counts = np.zeros(len(features))
+            for i in range(len(outputs)):
+                for j in range(seq_length):
+                    idx = i + j
+                    if idx < len(features):
+                        accumulated[idx] += outputs[i, j]
+                        counts[idx] += 1
+            for i in range(len(features)):
+                if counts[i] > 0:
+                    preds.append(accumulated[i] / counts[i])
+                else:
+                    preds.append(0.0)
+        return [float(p) for p in preds]
+
+    def save_model(self, model_path: str):
+        model_dir = os.path.dirname(model_path)
+        if model_dir and not os.path.exists(model_dir):
+            os.makedirs(model_dir)
+        torch.save({
+            'model_state_dict': self.model.state_dict(),
+            'sequence_length': self.sequence_length,
+            'input_size': self.input_size,
+            'long_silence_threshold': self.long_silence_threshold,
+            'duration_model': True,
+        }, model_path)
+        with open(model_path + '.scaler', 'wb') as f:
+            pickle.dump(self.scaler, f)
+
+    def load_model(self, model_path: str):
+        checkpoint = torch.load(model_path, map_location=self.device)
+        self.sequence_length = checkpoint.get('sequence_length', 10)
+        self.input_size = checkpoint.get('input_size', self.input_size)
+        self.long_silence_threshold = checkpoint.get('long_silence_threshold')
+        self.model = LSTMSilenceRegressor(self.input_size).to(self.device)
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        scaler_path = model_path + '.scaler'
+        if os.path.exists(scaler_path):
+            with open(scaler_path, 'rb') as f:
+                self.scaler = pickle.load(f)
+
 
 # Run a quick test to verify CUDA is working
 if __name__ == "__main__":

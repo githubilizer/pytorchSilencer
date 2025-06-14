@@ -271,4 +271,30 @@ class TranscriptProcessor:
         if all_feature_sequences:
             return np.vstack(all_feature_sequences), np.vstack(all_silence_sequences)
         else:
-            return np.array([]), np.array([]) 
+            return np.array([]), np.array([])
+
+    @staticmethod
+    def load_duration_sequences(directory: str, sequence_length: int = 10, stride: int = 1) -> Tuple[np.ndarray, np.ndarray]:
+        """Load training transcripts returning actual silence durations.
+
+        This is used for models that predict the desired silence length for each
+        pause rather than a simple keep/cut decision.
+        """
+        all_feature_sequences = []
+        all_duration_sequences = []
+
+        for filename in os.listdir(directory):
+            if filename.endswith('.txt'):
+                file_path = os.path.join(directory, filename)
+                transcript = TranscriptProcessor.parse_transcript(file_path)
+
+                feature_seqs, duration_seqs = transcript.get_contextual_sequences(sequence_length, stride)
+
+                if len(feature_seqs) > 0:
+                    all_feature_sequences.append(feature_seqs)
+                    all_duration_sequences.append(duration_seqs)
+
+        if all_feature_sequences:
+            return np.vstack(all_feature_sequences), np.vstack(all_duration_sequences)
+        else:
+            return np.array([]), np.array([])
