@@ -27,8 +27,20 @@ def process_transcript(model_path, input_path, output_path=None, threshold=0.01)
     cut_markers = [not k for k in keep]
     if output_path:
         typical = TranscriptProcessor.estimate_typical_silence(transcript)
-        remaining = [typical if m else 0.0 for m in cut_markers]
-        TranscriptProcessor.save_processed_transcript(transcript, output_path, cut_markers, remaining)
+        cut_amounts = []
+        for i, entry in enumerate(transcript.entries[:-1]):
+            silence_duration = transcript.entries[i + 1].start_time - entry.end_time
+            if cut_markers[i]:
+                extra = max(silence_duration - typical, 0.0)
+                cut_amounts.append(extra)
+            else:
+                cut_amounts.append(0.0)
+        TranscriptProcessor.save_processed_transcript(
+            transcript,
+            output_path,
+            cut_markers,
+            cut_amounts,
+        )
     total = len(keep)
     cut = sum(cut_markers)
     print(f"Silences marked for cutting: {cut}/{total}")

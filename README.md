@@ -111,10 +111,10 @@ The output adds `[SILENCE-CUT]` markers to indicate silences that should be remo
 ```
 
 When a duration is included, e.g. `[SILENCE-CUT 0.68s]`, the number
-represents how much of that silence should remain **after** the edit.
-The Audio Silencer removes the rest from the middle of the silence and
-uses that remaining duration as the crossfade length, so in this example
-only `0.68` seconds of audio/video are blended between the surrounding
+represents how much silence should be **removed** from that gap. The
+Audio Silencer trims this amount from the middle of the silence and uses
+the leftover portion as the crossfade length. In this example, `0.68`
+seconds are cut while the rest is blended between the surrounding
 segments.
 
 ## LSTM Model Architecture

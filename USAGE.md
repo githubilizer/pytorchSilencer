@@ -97,6 +97,6 @@ Then use the interface to:
 2. Process transcripts (Prediction tab)
 3. Cut video using processed transcript (Audio Silencer tab)
    - If the transcript includes markers like `[SILENCE-CUT 0.68s]`, the number
-     specifies the crossfade length. The remaining silence is trimmed from the
-     middle of the gap so only that amount (e.g. `0.68` seconds) is blended
-     between the neighbouring clips.
+     indicates how much silence should be removed. The leftover portion is used
+     as the crossfade length so only that part is blended between the
+     neighbouring clips.
