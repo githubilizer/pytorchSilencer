@@ -121,7 +121,9 @@ def process_transcript(
         
         # Predict which silences to cut using the model
         print("Predicting silences to cut...")
-        keep_silence = predictor.predict(features, threshold=threshold)
+        keep_silence, scores = predictor.predict_with_scores(
+            features, threshold=threshold
+        )
 
         # Convert keep predictions to cut markers for saving
         cut_markers = [not keep for keep in keep_silence]
@@ -154,7 +156,8 @@ def process_transcript(
                 silence_duration = transcript.entries[i + 1].start_time - entry.end_time
                 if cut_markers[i]:
                     extra = max(silence_duration - typical, 0.0)
-                    cut_amounts.append(extra)
+                    severity = max(scores[i] - threshold, 0.0) / max(1 - threshold, 1e-6)
+                    cut_amounts.append(extra * severity)
                 else:
                     cut_amounts.append(0.0)
             TranscriptProcessor.save_processed_transcript(

@@ -48,10 +48,12 @@ See `requirements.txt` for detailed dependencies.
 
 ## Usage
 
-1. Run the application:
+1. Run the application (GUI wrapper):
    ```
-   python app.py
+   python gui_wrapper.py
    ```
+   The GUI is the primary interface for training models and processing
+   transcripts.
 
 2. **Training**:
    - Navigate to the "Training" tab
@@ -116,6 +118,12 @@ Audio Silencer trims this amount from the middle of the silence and uses
 the leftover portion as the crossfade length. In this example, `0.68`
 seconds are cut while the rest is blended between the surrounding
 segments.
+
+The exact amount of silence removed for each gap is determined by the
+LSTM model. Instead of using a static value, the model predicts how much
+of the detected pause is excessive based on the surrounding words. The
+more confident the model is that a silence should be shortened, the more
+of that gap will be removed.
 
 ## LSTM Model Architecture
 
