@@ -73,8 +73,8 @@ See `requirements.txt` for detailed dependencies.
 When running from the command line, the LSTM model automatically uses a
 long-silence threshold derived from the training data. You can override
 this by passing `--duration-threshold` with a custom number of seconds.
-Use `--keep-ratio` to specify what fraction of each cut silence should remain
-in the saved transcript.
+The `--keep-ratio` option is now ignored because the model outputs the exact
+amount of silence to remove for every gap.
 
 ## Transcript Format
 
@@ -119,11 +119,11 @@ the leftover portion as the crossfade length. In this example, `0.68`
 seconds are cut while the rest is blended between the surrounding
 segments.
 
-The exact amount of silence removed for each gap is determined by the
-LSTM model. Instead of using a static value, the model predicts how much
-of the detected pause is excessive based on the surrounding words. The
-more confident the model is that a silence should be shortened, the more
-of that gap will be removed.
+The exact amount of silence removed for each gap is now determined by a
+duration model. Rather than relying on a fixed formula, the LSTM
+predicts how much of the detected pause is excessive based on the
+surrounding words. The more confident the model is that a silence should
+be shortened, the more of that gap will be removed.
 
 ## LSTM Model Architecture
 

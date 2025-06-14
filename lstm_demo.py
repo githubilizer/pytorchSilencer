@@ -10,7 +10,7 @@ import argparse
 import numpy as np
 import torch
 from data_processor import TranscriptProcessor
-from silence_model import SilencePredictor
+from silence_model import SilenceDurationPredictor
 import time
 
 def train_model(data_dir, model_path, sequence_length=10, epochs=50, batch_size=8):
@@ -18,9 +18,9 @@ def train_model(data_dir, model_path, sequence_length=10, epochs=50, batch_size=
     print(f"Training model with sequence length {sequence_length}, {epochs} epochs, batch size {batch_size}")
     
     try:
-        # Load training data
-        features, labels = TranscriptProcessor.load_training_sequences(
-            data_dir, 
+        # Load training data with actual silence durations
+        features, labels = TranscriptProcessor.load_duration_sequences(
+            data_dir,
             sequence_length=sequence_length,
             stride=1
         )
@@ -39,7 +39,7 @@ def train_model(data_dir, model_path, sequence_length=10, epochs=50, batch_size=
         if long_thresh is not None:
             print(f"Derived long silence threshold: {long_thresh:.2f}s")
 
-        predictor = SilencePredictor(
+        predictor = SilenceDurationPredictor(
             sequence_length=sequence_length,
             force_cpu=False,
             long_silence_threshold=long_thresh,
@@ -91,7 +91,7 @@ def process_transcript(
     output_path : str, optional
         Where to save the processed transcript.
     threshold : float, optional
-        Prediction threshold for the LSTM model.
+        Unused. Maintained for backward compatibility.
     duration_threshold : float, optional
         Override for long silence detection. If None, the value
         stored in the model will be used.
@@ -101,8 +101,8 @@ def process_transcript(
         extra silence duration to remove.
     """
     try:
-        # Load the model - Use GPU with the nightly build that supports RTX 5060
-        predictor = SilencePredictor(model_path=model_path, force_cpu=False)
+        # Load the duration model
+        predictor = SilenceDurationPredictor(model_path=model_path, force_cpu=False)
         
         # Load transcript
         print(f"Loading transcript from {input_path}")
@@ -119,14 +119,18 @@ def process_transcript(
             print("No features extracted from transcript.")
             return False
         
-        # Predict which silences to cut using the model
-        print("Predicting silences to cut...")
-        keep_silence, scores = predictor.predict_with_scores(
-            features, threshold=threshold
-        )
+        # Predict ideal remaining silence durations
+        print("Predicting target silence durations...")
+        predicted = predictor.predict_durations(features)
 
-        # Convert keep predictions to cut markers for saving
-        cut_markers = [not keep for keep in keep_silence]
+        cut_markers = []
+        cut_amounts = []
+        for i, entry in enumerate(transcript.entries[:-1]):
+            actual = transcript.entries[i + 1].start_time - entry.end_time
+            desired = predicted[i] if i < len(predicted) else actual
+            cut = max(actual - desired, 0.0)
+            cut_markers.append(cut > 0.0)
+            cut_amounts.append(cut)
 
         # Fallback: enforce cutting of very long silences
         effective_threshold = duration_threshold
@@ -138,28 +142,20 @@ def process_transcript(
                 silence_duration = transcript.entries[i+1].start_time - entry.end_time
                 if silence_duration >= effective_threshold:
                     cut_markers[i] = True
+                    desired = predicted[i] if i < len(predicted) else 0.0
+                    cut_amounts[i] = max(silence_duration - desired, cut_amounts[i])
         
         # Calculate statistics using final cut markers
         total_silences = len(cut_markers)
         silences_to_cut = sum(1 for cut in cut_markers if cut)
         cut_percentage = silences_to_cut / total_silences * 100 if total_silences > 0 else 0
-        
+
         print(f"Total silences: {total_silences}")
         print(f"Silences marked for cutting: {silences_to_cut} ({cut_percentage:.1f}%)")
         
         # Save processed transcript if output path provided
         if output_path:
             print(f"Saving processed transcript to {output_path}")
-            typical = TranscriptProcessor.estimate_typical_silence(transcript)
-            cut_amounts = []
-            for i, entry in enumerate(transcript.entries[:-1]):
-                silence_duration = transcript.entries[i + 1].start_time - entry.end_time
-                if cut_markers[i]:
-                    extra = max(silence_duration - typical, 0.0)
-                    severity = max(scores[i] - threshold, 0.0) / max(1 - threshold, 1e-6)
-                    cut_amounts.append(extra * severity)
-                else:
-                    cut_amounts.append(0.0)
             TranscriptProcessor.save_processed_transcript(
                 transcript,
                 output_path,
@@ -192,7 +188,7 @@ def main():
     process_parser.add_argument("--model", required=True, help="Path to trained model")
     process_parser.add_argument("--input", required=True, help="Input transcript file")
     process_parser.add_argument("--output", help="Output transcript file")
-    process_parser.add_argument("--threshold", type=float, default=0.5, help="Prediction threshold (0-1)")
+    process_parser.add_argument("--threshold", type=float, default=0.5, help="Ignored parameter for backward compatibility")
     process_parser.add_argument(
         "--duration-threshold", type=float, default=None,
         help="Override automatic long silence threshold (seconds)")

@@ -45,8 +45,8 @@ When using CLI mode with LSTM processing:
 - `--batch-size`: Training batch size (default: 8)
 - `--duration-threshold`: Override the model's long-silence threshold
   (in seconds). By default the threshold is learned from training data.
-- `--keep-ratio`: Fraction of each cut silence to keep when saving the
-  processed transcript (default: 0.5)
+The `--keep-ratio` option is ignored with the duration model since each
+cut amount is predicted automatically.
 
 ## Example Workflows
 
