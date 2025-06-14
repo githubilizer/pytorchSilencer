@@ -86,7 +86,9 @@ def cut_video(video_path: str, transcript_path: str, output_path: str) -> None:
             cut_dur = seg_dur - remain
             keep_start = start + cut_dur / 2
             keep_end = end - cut_dur / 2
-            cf = 0.0
+            # Use the specified remaining duration as the crossfade length so
+            # that this amount of audio/video is preserved after cutting.
+            cf = remain
         else:
             keep_start = start + 0.1 * seg_dur
             keep_end = end - 0.1 * seg_dur
