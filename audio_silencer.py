@@ -56,9 +56,37 @@ def get_video_duration(path: str) -> float:
     return float(result.stdout.strip())
 
 
+def get_video_fps(path: str) -> float:
+    """Return average frames per second for the video using ffprobe."""
+    result = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=avg_frame_rate",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            path,
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=True,
+    )
+    fps_str = result.stdout.strip()
+    if "/" in fps_str:
+        num, denom = fps_str.split("/")
+        return float(num) / float(denom)
+    return float(fps_str)
+
+
 def cut_video(video_path: str, transcript_path: str, output_path: str) -> None:
     segments = parse_cut_segments(transcript_path)
     video_duration = get_video_duration(video_path)
+    fps = int(round(get_video_fps(video_path)))
 
     if not segments:
         subprocess.run(
@@ -104,7 +132,7 @@ def cut_video(video_path: str, transcript_path: str, output_path: str) -> None:
     filter_parts = []
     for idx, (s, e) in enumerate(keep_segments):
         filter_parts.append(
-            f"[0:v]trim=start={s}:end={e},setpts=PTS-STARTPTS[v{idx}]"
+            f"[0:v]trim=start={s}:end={e},setpts=PTS-STARTPTS,fps={fps}[v{idx}]"
         )
         filter_parts.append(
             f"[0:a]atrim=start={s}:end={e},asetpts=PTS-STARTPTS[a{idx}]"
