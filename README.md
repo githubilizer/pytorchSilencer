@@ -15,7 +15,7 @@ This application is designed to learn from well-formatted transcripts with appro
 - **Prediction**: Process new transcripts to identify silences that should be cut
 - **Visualization**: Monitor training progress with loss graphs
 - **Sleek Dark Mode UI**: Modern, eye-friendly interface
-- **Audio Silencer**: Trim video/audio based on processed transcripts with automatic crossfading
+- **Audio Silencer**: Trim video/audio based on processed transcripts with automatic crossfading and optional *middle-out* cuts when a remaining silence duration is provided
 
 ## How It Works
 
@@ -109,6 +109,11 @@ The output adds `[SILENCE-CUT]` markers to indicate silences that should be remo
 [35.98 -> 37.42] [SILENCE-CUT]
 ...
 ```
+
+When a duration is included, e.g. `[SILENCE-CUT 0.68s]`, the number
+represents how much of that silence should remain. The Audio Silencer
+removes the rest from the middle of the silence so the cut is less
+noticeable ("middle-out" style).
 
 ## LSTM Model Architecture
 

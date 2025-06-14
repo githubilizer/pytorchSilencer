@@ -96,3 +96,6 @@ Then use the interface to:
 1. Train a model (Training tab)
 2. Process transcripts (Prediction tab)
 3. Cut video using processed transcript (Audio Silencer tab)
+   - If the transcript includes markers like `[SILENCE-CUT 0.68s]`, the number
+     indicates how much of that silence should remain. The silencer removes the
+     rest from the middle of the gap for smoother results.
