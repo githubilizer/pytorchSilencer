@@ -260,11 +260,11 @@ class SilencePredictor:
         print(f"Training completed with {epochs} epochs")
         return losses
     
-    def predict(self, features: np.ndarray, threshold: float = 0.5) -> List[bool]:
-        """Predict which silences should be cut (False) or kept (True)"""
+    def predict_scores(self, features: np.ndarray) -> List[float]:
+        """Return raw prediction scores for each silence."""
         # Log device being used
         print(f"Predicting on device: {self.device}")
-        
+
         if len(features) == 0:
             return []
             
@@ -297,7 +297,7 @@ class SilencePredictor:
         
         # Predict
         self.model.eval()
-        predictions = []
+        scores = []
         
         try:
             with torch.no_grad():
@@ -307,7 +307,7 @@ class SilencePredictor:
                 # Process the overlapping predictions
                 if len(features) <= seq_length:
                     # For short sequences, just return all predictions
-                    predictions = outputs[0, :len(features)] >= threshold
+                    scores = outputs[0, :len(features)]
                 else:
                     # For longer sequences, we have overlapping predictions
                     # Initialize array to accumulate predictions
@@ -322,12 +322,12 @@ class SilencePredictor:
                                 accumulated[idx] += outputs[i, j]
                                 counts[idx] += 1
                     
-                    # Average predictions and apply threshold
+                    # Average predictions
                     for i in range(len(features)):
                         if counts[i] > 0:
-                            predictions.append(accumulated[i] / counts[i] >= threshold)
+                            scores.append(accumulated[i] / counts[i])
                         else:
-                            predictions.append(True)  # Default to keep if no prediction
+                            scores.append(1.0)
         except RuntimeError as e:
             if "CUDA out of memory" in str(e):
                 print("CUDA out of memory error. Falling back to CPU...")
@@ -344,7 +344,7 @@ class SilencePredictor:
                     
                     # Same processing as above
                     if len(features) <= seq_length:
-                        predictions = outputs[0, :len(features)] >= threshold
+                        scores = outputs[0, :len(features)]
                     else:
                         accumulated = np.zeros(len(features))
                         counts = np.zeros(len(features))
@@ -358,9 +358,9 @@ class SilencePredictor:
                         
                         for i in range(len(features)):
                             if counts[i] > 0:
-                                predictions.append(accumulated[i] / counts[i] >= threshold)
+                                scores.append(accumulated[i] / counts[i])
                             else:
-                                predictions.append(True)
+                                scores.append(1.0)
                 
                 # Move model back to original device
                 self.device = backup_device
@@ -369,7 +369,20 @@ class SilencePredictor:
                 # For other errors, just re-raise
                 raise
         
-        return [bool(p) for p in predictions]
+        return [float(p) for p in scores]
+
+    def predict(self, features: np.ndarray, threshold: float = 0.5) -> List[bool]:
+        """Predict which silences should be cut (False) or kept (True)."""
+        scores = self.predict_scores(features)
+        return [s >= threshold for s in scores]
+
+    def predict_with_scores(
+        self, features: np.ndarray, threshold: float = 0.5
+    ) -> Tuple[List[bool], List[float]]:
+        """Return boolean predictions along with raw scores."""
+        scores = self.predict_scores(features)
+        preds = [s >= threshold for s in scores]
+        return preds, scores
     
     def save_model(self, model_path: str):
         """Save model and scaler to file"""
