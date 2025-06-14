@@ -187,12 +187,12 @@ class TranscriptProcessor:
         transcript: TranscriptData,
         output_path: str,
         cut_markers: List[bool],
-        remaining_silences: Optional[List[float]] = None,
+        cut_durations: Optional[List[float]] = None,
     ):
         """Save transcript with silence cut markers.
 
-        If ``remaining_silences`` is provided, each ``[SILENCE-CUT]`` line will
-        include the predicted amount of silence to keep.
+        If ``cut_durations`` is provided, each ``[SILENCE-CUT]`` line will
+        include the amount of silence to remove from that gap.
         """
         with open(output_path, "w") as f:
             for i, entry in enumerate(transcript.entries):
@@ -204,13 +204,13 @@ class TranscriptProcessor:
 
                     if silence_duration > 0.01:
                         if i < len(cut_markers) and cut_markers[i]:
-                            remain = None
-                            if remaining_silences and i < len(remaining_silences):
-                                remain = remaining_silences[i]
-                            if remain is not None:
+                            cut = None
+                            if cut_durations and i < len(cut_durations):
+                                cut = cut_durations[i]
+                            if cut is not None:
                                 f.write(
                                     f"[{entry.end_time:.2f} -> {next_entry.start_time:.2f}] "
-                                    f"[SILENCE-CUT {remain:.2f}s]\n"
+                                    f"[SILENCE-CUT {cut:.2f}s]\n"
                                 )
                             else:
                                 f.write(

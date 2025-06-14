@@ -96,9 +96,9 @@ def process_transcript(
         Override for long silence detection. If None, the value
         stored in the model will be used.
     keep_ratio : float, optional
-        Fraction of each cut silence to keep in the output. The
-        remaining duration will vary with the original silence
-        length.
+        (Deprecated) Previously indicated what fraction of a cut silence to
+        keep. This value is ignored; the processor now outputs the exact
+        extra silence duration to remove.
     """
     try:
         # Load the model - Use GPU with the nightly build that supports RTX 5060
@@ -148,16 +148,20 @@ def process_transcript(
         # Save processed transcript if output path provided
         if output_path:
             print(f"Saving processed transcript to {output_path}")
-            remaining = []
+            typical = TranscriptProcessor.estimate_typical_silence(transcript)
+            cut_amounts = []
             for i, entry in enumerate(transcript.entries[:-1]):
                 silence_duration = transcript.entries[i + 1].start_time - entry.end_time
                 if cut_markers[i]:
-                    remain = max(silence_duration * keep_ratio, 0.0)
-                    remaining.append(remain)
+                    extra = max(silence_duration - typical, 0.0)
+                    cut_amounts.append(extra)
                 else:
-                    remaining.append(0.0)
+                    cut_amounts.append(0.0)
             TranscriptProcessor.save_processed_transcript(
-                transcript, output_path, cut_markers, remaining
+                transcript,
+                output_path,
+                cut_markers,
+                cut_amounts,
             )
         
         return True

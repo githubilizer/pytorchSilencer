@@ -2,8 +2,9 @@
 """Utility to trim video/audio using processed transcript with silence markers.
 
 Cuts out portions of the video that are marked with ``[SILENCE-CUT]`` in the
-transcript. Each cut removes 80% of the silence from the middle of the
-segment and crossfades the remaining 10% at each edge.
+transcript. The number after ``[SILENCE-CUT]`` now represents the amount of
+silence to remove. Any remaining portion of the gap is used as the crossfade
+length when splicing the video.
 
 This version relies on ``ffmpeg`` via ``subprocess`` instead of ``moviepy``.
 """
@@ -13,10 +14,10 @@ import subprocess
 from typing import List, Tuple, Optional
 
 def parse_cut_segments(path: str) -> List[Tuple[float, float, Optional[float]]]:
-    """Return list of (start, end, remain) tuples for ``[SILENCE-CUT]`` markers.
+    """Return list of (start, end, cut) tuples for ``[SILENCE-CUT]`` markers.
 
-    ``remain`` is the amount of silence to keep. If not specified in the
-    transcript, ``remain`` will be ``None``.
+    ``cut`` is the amount of silence to remove. If not specified in the
+    transcript, ``cut`` will be ``None``.
     """
     segments: List[Tuple[float, float, Optional[float]]] = []
     timestamp = re.compile(r"\[(\d+(?:\.\d+)?) -> (\d+(?:\.\d+)?)\]")
@@ -108,15 +109,14 @@ def cut_video(video_path: str, transcript_path: str, output_path: str) -> None:
     keep_segments: List[Tuple[float, float]] = []
     crossfades: List[float] = []
     current = 0.0
-    for start, end, remain in segments:
+    for start, end, cut in segments:
         seg_dur = end - start
-        if remain is not None and remain < seg_dur:
-            cut_dur = seg_dur - remain
-            keep_start = start + cut_dur / 2
-            keep_end = end - cut_dur / 2
-            # Use the specified remaining duration as the crossfade length so
-            # that this amount of audio/video is preserved after cutting.
-            cf = remain
+        if cut is not None and cut < seg_dur:
+            keep_start = start + cut / 2
+            keep_end = end - cut / 2
+            remain = seg_dur - cut
+            # Use the remaining duration as the crossfade length.
+            cf = max(remain, 0.0)
         else:
             keep_start = start + 0.1 * seg_dur
             keep_end = end - 0.1 * seg_dur
