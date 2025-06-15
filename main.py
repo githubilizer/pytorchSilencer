@@ -986,8 +986,6 @@ class PytorchSilencerApp(QMainWindow):
 
         data_layout.addLayout(good_layout)
         data_layout.addLayout(bad_layout)
-
-        self.update_data_status()
         
         # Model parameters
         param_group = QGroupBox("Model Parameters")
@@ -1061,7 +1059,7 @@ class PytorchSilencerApp(QMainWindow):
         # Add widgets to progress layout
         progress_layout.addWidget(self.data_status_label)
         progress_layout.addWidget(self.progress_bar)
-        
+
         # Add all components to main layout
         layout.addWidget(data_group)
         layout.addWidget(param_group)
@@ -1069,6 +1067,9 @@ class PytorchSilencerApp(QMainWindow):
         layout.addLayout(button_layout)
         layout.addWidget(progress_group)
         layout.addWidget(log_group, 1)  # Give log more stretch
+
+        # Update data status now that label exists
+        self.update_data_status()
         
     def setup_prediction_tab(self, tab):
         # Layout
