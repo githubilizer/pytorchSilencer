@@ -844,7 +844,8 @@ class PytorchSilencerApp(QMainWindow):
         self.PATHS_FILE = os.path.join(os.path.dirname(__file__), "last_paths.json")
 
         # Initialize paths
-        self.training_data_dir = ""
+        self.good_data_dir = ""
+        self.bad_data_dir = ""
 
         # Load last used model if available
         self.model_path = ""
@@ -947,23 +948,46 @@ class PytorchSilencerApp(QMainWindow):
         
         # Training data selection
         data_group = QGroupBox("Training Data")
-        data_layout = QHBoxLayout(data_group)
-        
-        self.training_data_path = QLineEdit()
-        self.training_data_path.setReadOnly(True)
-        self.training_data_path.setPlaceholderText("Select training data directory...")
-        
-        browse_button = QPushButton("Browse...")
-        browse_button.clicked.connect(self.browse_training_data)
-        
+        data_layout = QVBoxLayout(data_group)
+
+        good_layout = QHBoxLayout()
+        self.good_data_path = QLineEdit()
+        self.good_data_path.setReadOnly(True)
+        self.good_data_path.setPlaceholderText("Select GOOD transcripts directory...")
+
+        if self.good_data_dir:
+            self.good_data_path.setText(self.good_data_dir)
+
+        browse_good_button = QPushButton("Browse...")
+        browse_good_button.clicked.connect(self.browse_good_data)
+
         # Add quick load button for GOODFULLSCRIPTSDATA
         quick_load_button = QPushButton("Load Full Scripts")
         quick_load_button.setToolTip("Load training data from GOODFULLSCRIPTSDATA folder")
         quick_load_button.clicked.connect(self.load_full_scripts_data)
-        
-        data_layout.addWidget(self.training_data_path)
-        data_layout.addWidget(browse_button)
-        data_layout.addWidget(quick_load_button)
+
+        good_layout.addWidget(self.good_data_path)
+        good_layout.addWidget(browse_good_button)
+        good_layout.addWidget(quick_load_button)
+
+        bad_layout = QHBoxLayout()
+        self.bad_data_path = QLineEdit()
+        self.bad_data_path.setReadOnly(True)
+        self.bad_data_path.setPlaceholderText("Select BAD transcripts directory...")
+
+        if self.bad_data_dir:
+            self.bad_data_path.setText(self.bad_data_dir)
+
+        browse_bad_button = QPushButton("Browse...")
+        browse_bad_button.clicked.connect(self.browse_bad_data)
+
+        bad_layout.addWidget(self.bad_data_path)
+        bad_layout.addWidget(browse_bad_button)
+
+        data_layout.addLayout(good_layout)
+        data_layout.addLayout(bad_layout)
+
+        self.update_data_status()
         
         # Model parameters
         param_group = QGroupBox("Model Parameters")
@@ -1242,16 +1266,30 @@ class PytorchSilencerApp(QMainWindow):
         self.notes_editor = NotesTextEdit(self.NOTES_FILE)
         layout.addWidget(self.notes_editor)
         
-    def browse_training_data(self):
-        directory = QFileDialog.getExistingDirectory(self, "Select Training Data Directory")
+    def browse_good_data(self):
+        directory = QFileDialog.getExistingDirectory(self, "Select Good Transcript Directory")
         if directory:
-            self.training_data_dir = directory
-            self.training_data_path.setText(directory)
-
-            # Check for transcript files
-            count = sum(1 for f in os.listdir(directory) if f.endswith('.txt'))
-            self.data_status_label.setText(f"Found {count} transcript files")
+            self.good_data_dir = directory
+            self.good_data_path.setText(directory)
+            self.update_data_status()
             self.save_paths()
+
+    def browse_bad_data(self):
+        directory = QFileDialog.getExistingDirectory(self, "Select Bad Transcript Directory")
+        if directory:
+            self.bad_data_dir = directory
+            self.bad_data_path.setText(directory)
+            self.update_data_status()
+            self.save_paths()
+
+    def update_data_status(self):
+        good_count = 0
+        bad_count = 0
+        if self.good_data_dir and os.path.isdir(self.good_data_dir):
+            good_count = sum(1 for f in os.listdir(self.good_data_dir) if f.endswith('.txt'))
+        if self.bad_data_dir and os.path.isdir(self.bad_data_dir):
+            bad_count = sum(1 for f in os.listdir(self.bad_data_dir) if f.endswith('.txt'))
+        self.data_status_label.setText(f"Good: {good_count} files   Bad: {bad_count} files")
             
     def set_model_path(self):
         file_path, _ = QFileDialog.getSaveFileName(
@@ -1267,8 +1305,8 @@ class PytorchSilencerApp(QMainWindow):
             
     def train_model(self):
         # Validate inputs
-        if not self.training_data_dir:
-            QMessageBox.warning(self, "No Data", "Please select a training data directory first.")
+        if not self.good_data_dir or not self.bad_data_dir:
+            QMessageBox.warning(self, "No Data", "Please select directories for both GOOD and BAD transcripts first.")
             return
             
         # Get parameters
@@ -1292,11 +1330,12 @@ class PytorchSilencerApp(QMainWindow):
         # Run training in background thread
         self.command_thread = WorkerThread(
             train_model,
-            self.training_data_dir,
+            self.good_data_dir,
             model_path,
             sequence_length=seq_length,
             epochs=epochs,
             batch_size=batch_size,
+            bad_dir=self.bad_data_dir,
         )
         self.command_thread.progress_update.connect(self.add_log_message)
         self.command_thread.work_finished.connect(self.on_training_finished)
@@ -1563,12 +1602,10 @@ class PytorchSilencerApp(QMainWindow):
         """Hardcoded function to load data from GOODFULLSCRIPTSDATA folder"""
         data_path = "/home/j/Desktop/code/pytorchSilencer/GOODFULLSCRIPTSDATA"
         if os.path.exists(data_path) and os.path.isdir(data_path):
-            self.training_data_dir = data_path
-            self.training_data_path.setText(data_path)
-            
-            # Check for transcript files
+            self.good_data_dir = data_path
+            self.good_data_path.setText(data_path)
+            self.update_data_status()
             count = sum(1 for f in os.listdir(data_path) if f.endswith('.txt'))
-            self.data_status_label.setText(f"Found {count} transcript files in Full Scripts data")
             self.add_log_message(f"Loaded Full Scripts data with {count} transcript files")
         else:
             QMessageBox.warning(self, "Error", "GOODFULLSCRIPTSDATA folder not found at expected location")
@@ -1579,7 +1616,8 @@ class PytorchSilencerApp(QMainWindow):
             try:
                 with open(self.PATHS_FILE, "r") as f:
                     data = json.load(f)
-                self.training_data_dir = data.get("training_data_dir", self.training_data_dir)
+                self.good_data_dir = data.get("good_data_dir", self.good_data_dir)
+                self.bad_data_dir = data.get("bad_data_dir", self.bad_data_dir)
                 self.input_transcript = data.get("input_transcript", self.input_transcript)
                 self.output_transcript = data.get("output_transcript", self.output_transcript)
                 self.processed_transcript_path = data.get("processed_transcript_path", self.processed_transcript_path)
@@ -1591,7 +1629,8 @@ class PytorchSilencerApp(QMainWindow):
     def save_paths(self):
         """Persist current paths to disk"""
         data = {
-            "training_data_dir": self.training_data_dir,
+            "good_data_dir": self.good_data_dir,
+            "bad_data_dir": self.bad_data_dir,
             "input_transcript": self.input_transcript,
             "output_transcript": self.output_transcript,
             "processed_transcript_path": self.processed_transcript_path,

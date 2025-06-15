@@ -57,7 +57,7 @@ See `requirements.txt` for detailed dependencies.
 
 2. **Training**:
    - Navigate to the "Training" tab
-   - Select a directory containing good transcript examples
+   - Select directories containing **good** and **bad** transcript examples
    - Configure LSTM parameters (sequence length, stride)
    - Set training parameters
    - Click "Train Model"
@@ -80,7 +80,8 @@ amount of silence to remove for every gap.
 
 To teach the model the difference between well-timed pauses and awkward ones you
 can provide both a directory of **good** transcripts and a directory of
-**bad** transcripts. Silences from the good set are treated as positive examples
+**bad** transcripts. The GUI now includes two browse fields for these
+directories. Silences from the good set are treated as positive examples
 while silences from the bad set are negatives:
 
 ```bash
