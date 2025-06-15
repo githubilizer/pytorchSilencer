@@ -213,7 +213,7 @@ class TranscriptProcessor:
     def detect_excessive_silences(
         transcript: TranscriptData,
         max_silence: float = 0.5,
-        normal_limit: float = 0.05,
+        normal_limit: float = 0.09,
         punct_limit: float = 0.30,
     ) -> Tuple[List[bool], List[float]]:
         """Return cut markers and excess durations for every gap between entries."""
@@ -231,7 +231,8 @@ class TranscriptProcessor:
             allowed = punct_limit if punct_re.search(entry.text.strip()) else normal_limit
             excess = max(silence_duration - allowed, 0.0)
 
-            if silence_duration > max_silence or excess > 0:
+            should_cut = silence_duration > max_silence or silence_duration > allowed
+            if should_cut:
                 cut_markers.append(True)
                 cut_durations.append(excess)
                 print(
@@ -677,7 +678,7 @@ def process_transcript(
         cut_markers, cut_amounts = TranscriptProcessor.detect_excessive_silences(
             transcript,
             max_silence=0.5,
-            normal_limit=0.05,
+            normal_limit=0.09,
             punct_limit=0.30,
         )
 
