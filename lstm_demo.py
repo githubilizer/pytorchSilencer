@@ -10,40 +10,66 @@ import argparse
 import numpy as np
 import torch
 from data_processor import TranscriptProcessor
-from silence_model import SilenceDurationPredictor
+from silence_model import SilenceDurationPredictor, SilencePredictor
 import time
 
-def train_model(data_dir, model_path, sequence_length=10, epochs=50, batch_size=8):
-    """Train a new silence prediction model"""
-    print(f"Training model with sequence length {sequence_length}, {epochs} epochs, batch size {batch_size}")
+def train_model(good_dir, model_path, sequence_length=10, epochs=50, batch_size=8, bad_dir=None):
+    """Train a new silence prediction model.
+
+    If ``bad_dir`` is provided, a classifier is trained using silences from
+    ``good_dir`` as positive examples and those from ``bad_dir`` as negatives.
+    Otherwise a duration model is trained using only ``good_dir``.
+    """
+    print(
+        f"Training model with sequence length {sequence_length}, {epochs} epochs, batch size {batch_size}"
+    )
     
     try:
-        # Load training data with actual silence durations
-        features, labels = TranscriptProcessor.load_duration_sequences(
-            data_dir,
-            sequence_length=sequence_length,
-            stride=1
-        )
-        
+        if bad_dir:
+            features, labels = TranscriptProcessor.load_labeled_sequences(
+                good_dir,
+                bad_dir,
+                sequence_length=sequence_length,
+                stride=1,
+            )
+            good_feats, _ = TranscriptProcessor.load_duration_sequences(
+                good_dir,
+                sequence_length=sequence_length,
+                stride=1,
+            )
+        else:
+            features, labels = TranscriptProcessor.load_duration_sequences(
+                good_dir,
+                sequence_length=sequence_length,
+                stride=1,
+            )
+            good_feats = features
+
         if len(features) == 0:
             print("No training data found. Please check the data directory.")
             return False
-            
+
         print(f"Loaded {len(features)} training sequences with shape {features.shape}")
-        
-        # Initialize model - Use GPU with the nightly build that supports RTX 5060
-        # Derive long silence threshold from training data
-        silence_vals = features[:, :, 2].reshape(-1)
+
+        # Derive long silence threshold from good training data
+        silence_vals = good_feats[:, :, 2].reshape(-1)
         silence_vals = silence_vals[silence_vals > 0]
         long_thresh = float(np.percentile(silence_vals, 95)) if len(silence_vals) > 0 else None
         if long_thresh is not None:
             print(f"Derived long silence threshold: {long_thresh:.2f}s")
 
-        predictor = SilenceDurationPredictor(
-            sequence_length=sequence_length,
-            force_cpu=False,
-            long_silence_threshold=long_thresh,
-        )
+        if bad_dir:
+            predictor = SilencePredictor(
+                sequence_length=sequence_length,
+                force_cpu=False,
+                long_silence_threshold=long_thresh,
+            )
+        else:
+            predictor = SilenceDurationPredictor(
+                sequence_length=sequence_length,
+                force_cpu=False,
+                long_silence_threshold=long_thresh,
+            )
         
         # Train model with more verbose output
         for epoch in range(1, epochs+1):
@@ -177,7 +203,18 @@ def main():
     
     # Train subcommand
     train_parser = subparsers.add_parser("train", help="Train a new model")
-    train_parser.add_argument("--data", required=True, help="Path to directory with training data")
+    train_parser.add_argument(
+        "--data",
+        "--good",
+        dest="good",
+        required=True,
+        help="Directory with good transcript examples",
+    )
+    train_parser.add_argument(
+        "--bad",
+        help="Directory with bad transcript examples",
+        default=None,
+    )
     train_parser.add_argument("--model", required=True, help="Path to save model")
     train_parser.add_argument("--seq-length", type=int, default=10, help="Sequence length for LSTM")
     train_parser.add_argument("--epochs", type=int, default=50, help="Training epochs")
@@ -203,7 +240,14 @@ def main():
     
     # Execute appropriate command
     if args.command == "train":
-        train_model(args.data, args.model, args.seq_length, args.epochs, args.batch_size)
+        train_model(
+            args.good,
+            args.model,
+            sequence_length=args.seq_length,
+            epochs=args.epochs,
+            batch_size=args.batch_size,
+            bad_dir=args.bad,
+        )
     elif args.command == "process":
         process_transcript(
             args.model,

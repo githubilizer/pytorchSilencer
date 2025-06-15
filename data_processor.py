@@ -298,3 +298,43 @@ class TranscriptProcessor:
             return np.vstack(all_feature_sequences), np.vstack(all_duration_sequences)
         else:
             return np.array([]), np.array([])
+
+    @staticmethod
+    def load_labeled_sequences(
+        good_directory: str,
+        bad_directory: str,
+        sequence_length: int = 10,
+        stride: int = 1,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Load sequences from good and bad examples with labels.
+
+        Each silence from ``good_directory`` is labeled ``1`` (keep) while
+        silences from ``bad_directory`` are labeled ``0`` (cut). The examples are
+        not paired; we simply combine all sequences from both sets.
+        """
+
+        feature_sequences = []
+        label_sequences = []
+
+        def add_from_dir(directory: str, label: int):
+            if not directory:
+                return
+            for fname in os.listdir(directory):
+                if not fname.endswith(".txt"):
+                    continue
+                path = os.path.join(directory, fname)
+                transcript = TranscriptProcessor.parse_transcript(path)
+                feats, _ = transcript.get_contextual_sequences(sequence_length, stride)
+                if len(feats) > 0:
+                    feature_sequences.append(feats)
+                    label_sequences.append(
+                        np.full((feats.shape[0], feats.shape[1]), label, dtype=np.float32)
+                    )
+
+        add_from_dir(good_directory, 1)
+        add_from_dir(bad_directory, 0)
+
+        if feature_sequences:
+            return np.vstack(feature_sequences), np.vstack(label_sequences)
+        else:
+            return np.array([]), np.array([])
