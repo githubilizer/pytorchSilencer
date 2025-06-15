@@ -220,6 +220,7 @@ class TranscriptProcessor:
         cut_markers: List[bool] = []
         cut_durations: List[float] = []
         punct_re = re.compile(r"[.,!?]$")
+        eps = 1e-6
 
         for i in range(len(transcript.entries) - 1):
             entry = transcript.entries[i]
@@ -229,9 +230,9 @@ class TranscriptProcessor:
             silence_duration = max(gap_end - entry.end_time, 0.0)
 
             allowed = punct_limit if punct_re.search(entry.text.strip()) else normal_limit
-            excess = max(silence_duration - allowed, 0.0)
+            excess = silence_duration - allowed if silence_duration - allowed > eps else 0.0
 
-            should_cut = silence_duration > max_silence or silence_duration > allowed
+            should_cut = (silence_duration - max_silence > eps) or (silence_duration - allowed > eps)
             if should_cut:
                 cut_markers.append(True)
                 cut_durations.append(excess)
