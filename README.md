@@ -48,9 +48,9 @@ See `requirements.txt` for detailed dependencies.
 
 ## Usage
 
-1. Run the application (GUI wrapper):
+1. Run the application:
    ```
-   python gui_wrapper.py
+   python main.py
    ```
    The GUI is the primary interface for training models and processing
    transcripts.
