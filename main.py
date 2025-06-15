@@ -210,6 +210,40 @@ class TranscriptProcessor:
         print(f"Processed transcript saved to {output_path}")
 
     @staticmethod
+    def detect_excessive_silences(
+        transcript: TranscriptData,
+        max_silence: float = 0.5,
+        normal_limit: float = 0.05,
+        punct_limit: float = 0.30,
+    ) -> Tuple[List[bool], List[float]]:
+        """Return cut markers and excess durations for silences between words."""
+        cut_markers: List[bool] = []
+        cut_durations: List[float] = []
+        punct_re = re.compile(r"[.,!?]$")
+
+        for i in range(len(transcript.entries) - 1):
+            entry = transcript.entries[i]
+            next_entry = transcript.entries[i + 1]
+            if entry.text.strip() and not next_entry.text.strip():
+                silence_duration = next_entry.end_time - next_entry.start_time
+                allowed = punct_limit if punct_re.search(entry.text.strip()) else normal_limit
+                excess = max(silence_duration - allowed, 0.0)
+                if silence_duration > max_silence or excess > 0:
+                    cut_markers.append(True)
+                    cut_durations.append(excess)
+                    print(
+                        f"Excessive silence after '{entry.text.strip()}': {silence_duration:.2f}s (cut {excess:.2f}s)"
+                    )
+                else:
+                    cut_markers.append(False)
+                    cut_durations.append(0.0)
+            else:
+                cut_markers.append(False)
+                cut_durations.append(0.0)
+
+        return cut_markers, cut_durations
+
+    @staticmethod
     def load_duration_sequences(directory: str, sequence_length: int = 10, stride: int = 1) -> Tuple[np.ndarray, np.ndarray]:
         all_feature_sequences = []
         all_duration_sequences = []
@@ -624,38 +658,29 @@ def train_model(good_dir: str, model_path: str, sequence_length: int = 10, epoch
         return False
 
 
-def process_transcript(model_path: str, input_path: str, output_path: Optional[str] = None, threshold: float = 0.5, duration_threshold: Optional[float] = None, keep_ratio: float = 0.5) -> bool:
+def process_transcript(
+    model_path: str,
+    input_path: str,
+    output_path: Optional[str] = None,
+    threshold: float = 0.5,
+    duration_threshold: Optional[float] = None,
+    keep_ratio: float = 0.5,
+) -> bool:
+    """Process transcript by flagging excessive silences between words."""
     try:
-        predictor = SilenceDurationPredictor(model_path=model_path, force_cpu=False)
         print(f"Loading transcript from {input_path}")
         transcript = TranscriptProcessor.parse_transcript(input_path)
         if len(transcript.entries) == 0:
             print("No entries found in transcript.")
             return False
-        features = transcript.to_features()
-        if len(features) == 0:
-            print("No features extracted from transcript.")
-            return False
-        print("Predicting target silence durations...")
-        predicted = predictor.predict_durations(features)
-        cut_markers = []
-        cut_amounts = []
-        for i, entry in enumerate(transcript.entries[:-1]):
-            actual = transcript.entries[i + 1].start_time - entry.end_time
-            desired = predicted[i] if i < len(predicted) else actual
-            cut = max(actual - desired, 0.0)
-            cut_markers.append(cut > 0.0)
-            cut_amounts.append(cut)
-        effective_threshold = duration_threshold
-        if effective_threshold is None:
-            effective_threshold = predictor.long_silence_threshold
-        if effective_threshold is not None:
-            for i, entry in enumerate(transcript.entries[:-1]):
-                silence_duration = transcript.entries[i + 1].start_time - entry.end_time
-                if silence_duration >= effective_threshold:
-                    cut_markers[i] = True
-                    desired = predicted[i] if i < len(predicted) else 0.0
-                    cut_amounts[i] = max(silence_duration - desired, cut_amounts[i])
+
+        cut_markers, cut_amounts = TranscriptProcessor.detect_excessive_silences(
+            transcript,
+            max_silence=0.5,
+            normal_limit=0.05,
+            punct_limit=0.30,
+        )
+
         total_silences = len(cut_markers)
         silences_to_cut = sum(1 for cut in cut_markers if cut)
         cut_percentage = silences_to_cut / total_silences * 100 if total_silences > 0 else 0
