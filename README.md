@@ -76,6 +76,20 @@ this by passing `--duration-threshold` with a custom number of seconds.
 The `--keep-ratio` option is now ignored because the model outputs the exact
 amount of silence to remove for every gap.
 
+### Training with Good and Bad Examples
+
+To teach the model the difference between well-timed pauses and awkward ones you
+can provide both a directory of **good** transcripts and a directory of
+**bad** transcripts. Silences from the good set are treated as positive examples
+while silences from the bad set are negatives:
+
+```bash
+python lstm_demo.py train --good path/to/good --bad path/to/bad --model models/silence_model.pt
+```
+
+If `--bad` is omitted the script falls back to the duration-based model which
+learns how long each pause should be based only on the good data.
+
 ## Transcript Format
 
 The application expects transcripts in the following format:
