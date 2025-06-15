@@ -132,7 +132,7 @@ The model uses a bidirectional LSTM architecture:
 - **Input**: Sequences of word and silence features
 - **LSTM Layers**: Bidirectional LSTM with multiple layers
 - **Hidden Size**: Configurable hidden layer size
-- **Output**: Sequence of predictions for each silence (keep or cut)
+- **Output**: Sequence of predicted ideal silence durations for each pause
 
 This approach allows the model to understand the natural rhythm of speech and identify unnatural or excessive silences based on context.
 
