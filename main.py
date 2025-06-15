@@ -216,7 +216,7 @@ class TranscriptProcessor:
         normal_limit: float = 0.05,
         punct_limit: float = 0.30,
     ) -> Tuple[List[bool], List[float]]:
-        """Return cut markers and excess durations for silences between words."""
+        """Return cut markers and excess durations for every gap between entries."""
         cut_markers: List[bool] = []
         cut_durations: List[float] = []
         punct_re = re.compile(r"[.,!?]$")
@@ -224,19 +224,19 @@ class TranscriptProcessor:
         for i in range(len(transcript.entries) - 1):
             entry = transcript.entries[i]
             next_entry = transcript.entries[i + 1]
-            if entry.text.strip() and not next_entry.text.strip():
-                silence_duration = next_entry.end_time - next_entry.start_time
-                allowed = punct_limit if punct_re.search(entry.text.strip()) else normal_limit
-                excess = max(silence_duration - allowed, 0.0)
-                if silence_duration > max_silence or excess > 0:
-                    cut_markers.append(True)
-                    cut_durations.append(excess)
-                    print(
-                        f"Excessive silence after '{entry.text.strip()}': {silence_duration:.2f}s (cut {excess:.2f}s)"
-                    )
-                else:
-                    cut_markers.append(False)
-                    cut_durations.append(0.0)
+
+            gap_end = next_entry.end_time if not next_entry.text.strip() else next_entry.start_time
+            silence_duration = max(gap_end - entry.end_time, 0.0)
+
+            allowed = punct_limit if punct_re.search(entry.text.strip()) else normal_limit
+            excess = max(silence_duration - allowed, 0.0)
+
+            if silence_duration > max_silence or excess > 0:
+                cut_markers.append(True)
+                cut_durations.append(excess)
+                print(
+                    f"Excessive silence after '{entry.text.strip()}': {silence_duration:.2f}s (cut {excess:.2f}s)"
+                )
             else:
                 cut_markers.append(False)
                 cut_durations.append(0.0)
